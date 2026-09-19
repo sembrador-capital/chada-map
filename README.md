@@ -36,9 +36,57 @@ de tasación, no de las 292,23 modeladas.
 
 ---
 
+## El terreno: un campo con cerros
+
+La mitad del predio está en pendiente, y eso explica buena parte del resto. La
+vinífera son 94 paños pequeños siguiendo la curva de nivel a **538 m de media y
+25,8% de pendiente**; la uva de mesa está en el plano del valle, a **436 m y
+5,1%**. El campo va de **397 a 611 m**.
+
+| Especie | Pendiente media | Elevación media |
+|---|---:|---:|
+| Uva vinífera | 25,8% | 538 m |
+| Naranjos | 17,6% | 532 m |
+| Clementinas | 13,1% | 540 m |
+| Paltos | 9,7% | 544 m |
+| Cerezos | 7,3% | 460 m |
+| Uva de mesa | 5,1% | 436 m |
+| Ciruelos | 4,4% | 443 m |
+
+88 de los 174 cuarteles están sobre 15% de pendiente — el umbral donde cambia la
+maquinaria que entra.
+
+La pendiente **se calcula, no se estima**: `tools/terreno_to_json.py` baja los
+tiles Terrain-RGB de Mapbox que cubren el predio, arma la grilla de elevación y
+resume cada polígono. Tres decisiones que cambian el número, todas explícitas en
+el script:
+
+- **Zoom 14** (~7,9 m/px). El tile z15 existe, pero el dato de origen en la zona
+  ronda los 30 m: bajar a 4 m/px no agrega información, sólo interpola, y la
+  pendiente sale más suave de lo que es.
+- **Ventana de Horn con paso 2**, o sea una base de gradiente de ~32 m, del orden
+  de la resolución real del DEM. Con píxeles contiguos la pendiente se calcularía
+  sobre una interpolación y aparecería ruido que no está en el terreno.
+- **Porcentaje, no grados** — desnivel sobre distancia horizontal, como se habla
+  en campo. 100% son 45°.
+
+Control independiente: comparando el resultado de Horn contra desnivel sobre
+ancho equivalente del cuartel, los paños planos dan 2,0–2,5% por ambos caminos y
+los empinados quedan en el mismo rango de 33–48%.
+
+La **exposición** se promedia como vector unitario ponderado por la pendiente, no
+como número: promediar 350° y 10° aritméticamente daría sur donde hay norte.
+
+En el mapa, el relieve va en dos interruptores separados dentro de *Vista*:
+**sombreado del cerro** (encendido, bajo los polígonos para no ensuciar el color
+del cuartel) y **relieve 3D** (apagado por defecto: al inclinar la cámara los
+cuarteles del fondo se aplastan y las etiquetas se amontonan).
+
+---
+
 ## Qué muestra
 
-Tres modos, con la misma leyenda-árbol para encender y apagar cualquier rama.
+Cuatro modos, con la misma leyenda-árbol para encender y apagar cualquier rama.
 
 **Vista general** — identidad. Colorea por especie (siete tonos) o por variedad
 (el tono de su especie, escalonado en luminosidad). El mapa se lee primero por
@@ -49,6 +97,9 @@ especie y después por variedad.
 **Financiero** — EBITDA/ha, ingresos/ha, costos/ha o margen EBITDA, por
 temporada. EBITDA y margen usan una escala divergente en torno a cero: rojo bajo
 cero, azul sobre cero.
+
+**Terreno** — pendiente o elevación, desde el DEM. Sin selector de temporada: el
+cerro no cambia entre 2025 y 2046.
 
 En Producción y Financiero se abre el panel **Modelo**, con:
 
@@ -108,19 +159,24 @@ modelo_data.json                Superficie, producción, ingresos, costos y EBIT
 Hacienda Chada Huelquen.kmz     Fuente geográfica.
 tools/kml_to_geojson.py         KMZ → geo_data.json.
 tools/modelo_to_json.py         Modelo financiero → modelo_data.json (y cruce al KMZ).
+tools/terreno_to_json.py        DEM de Mapbox → pendiente, exposición y elevación por cuartel.
 datos_fuente/                   El .xlsx del modelo. Ignorado por git.
 ```
 
 ### Regenerar
 
-El orden importa: `modelo_to_json.py` lee `geo_data.json` y le escribe encima el
-cruce de cada cuartel contra el modelo.
+El orden importa. `kml_to_geojson.py` reescribe `geo_data.json` desde cero, y los
+otros dos le agregan encima: `modelo_to_json.py` el cruce de cada cuartel contra
+el modelo, y `terreno_to_json.py` la pendiente, la exposición y la elevación.
+Correr el primero sin los otros dos deja el mapa sin esas capas.
 
 ```bash
-python tools/kml_to_geojson.py && python tools/modelo_to_json.py
+python tools/kml_to_geojson.py && python tools/modelo_to_json.py && python tools/terreno_to_json.py
 ```
 
-`kml_to_geojson.py` sólo usa stdlib. `modelo_to_json.py` necesita `openpyxl`.
+`kml_to_geojson.py` sólo usa stdlib. `modelo_to_json.py` necesita `openpyxl`;
+`terreno_to_json.py` necesita `numpy`, `Pillow` y `requests`, y toma el token de
+Mapbox de `MAPBOX_TOKEN` o, si no está, del propio `index.html`.
 
 El libro trae 8.338 nombres definidos y al menos uno apunta a `#N/A`, lo que hace
 que openpyxl se niegue a abrirlo; el script reescribe una copia sin el bloque
@@ -166,8 +222,9 @@ KMZ y cambia si el KMZ se reordena: no sirve como llave entre fuentes.
 - **Marca y dato no comparten tokens.** El chrome usa la paleta Sembrador; las
   escalas de dato son propias y están validadas con el validador de paletas
   (seis chequeos, simulación de daltonismo Machado-Oliveira-Fernandes):
-  - las cuatro rampas —los dos brazos del divergente de EBITDA, el secuencial de
-    costos y el de ingresos/rendimiento— pasan los cuatro chequeos ordinales;
+  - las seis rampas —los dos brazos del divergente de EBITDA, el secuencial de
+    costos, el de ingresos/rendimiento, el de pendiente y el de elevación— pasan
+    los cuatro chequeos ordinales;
   - las tres series del gráfico pasan los seis chequeos en pares
     todos-contra-todos;
   - las siete ranuras de especie pasan en pares **adyacentes**. En pares
