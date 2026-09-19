@@ -116,13 +116,22 @@
 }
 
 * { box-sizing:border-box; }
+/* El atributo hidden por encima de cualquier display. Varias reglas del chrome
+   traen display:flex y le ganaban por especificidad, así que elementos que el
+   código daba por ocultos seguían a la vista -el botón del panel, las pestañas
+   del gráfico-. Se arregla una vez acá y no en cada selector. */
+[hidden] { display:none !important; }
 html, body { margin:0; padding:0; height:100%; overflow:hidden; }
 body {
     font-family:'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color:var(--sem-ink); background:var(--sem-beige-wash);
     -webkit-font-smoothing:antialiased;
 }
-#map { position:absolute; top:0; bottom:0; left:0; right:0; z-index:var(--z-map); transition:right 0.2s ease; }
+/* Sin transición sobre 'right'. Animarla dejaba la propiedad congelada en 0 —el
+   mapa nunca cedía el ancho y el panel terminaba encima— y, de yapa, obligaba a
+   redimensionar un canvas WebGL sesenta veces por segundo durante la animación.
+   El panel aparece de una; el mapa se reacomoda con él. */
+#map { position:absolute; top:0; bottom:0; left:0; right:0; z-index:var(--z-map); }
 body.panel-abierto #map { right:392px; }
 
 .glass {
@@ -166,7 +175,7 @@ use[href^="#ic-"] { stroke:currentColor; }
 }
 body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
 .fc-group { display:flex; flex-direction:column; gap:3px; }
-.fc-group[hidden], .fc-btn[hidden] { display:none !important; }
+
 .fc-label {
     font-size:9.5px; line-height:1.2; font-weight:500; letter-spacing:0.04em;
     text-transform:uppercase; color:var(--sem-text-2);
@@ -594,7 +603,7 @@ body.panel-abierto .data-stamp { right:408px; }
         <div class="mp-sect abierta" id="sectGrafico">
             <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Gráfico</button>
             <div class="mp-sect-body">
-                <div class="mp-chart-tabs">
+                <div class="mp-chart-tabs" id="mpChartTabs">
                     <button type="button" class="mp-chart-tab active" data-vista="serie">Por temporada</button>
                     <button type="button" class="mp-chart-tab" data-vista="ranking" id="tabRanking">Por variedad</button>
                 </div>
@@ -834,6 +843,7 @@ Promise.all([
     construirLeyenda();
     construirDatalist();
     sincronizarControles();
+    togglePanel(true);
     $('dataStamp').textContent = 'KMZ ' + (GEO.generated_at || '').slice(0, 10) +
         ' · Modelo ' + (MOD.generated_at || '').slice(0, 10);
     if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
@@ -1046,6 +1056,24 @@ function inicializar() {
     montarCapas();
     encuadrar(false);
     $('loader').hidden = true;
+
+    // El canvas de Mapbox se redimensiona cuando el contenedor cambia de
+    // tamaño, no cuando se lo pedimos. Al cerrar el panel, #map anima su ancho
+    // durante 200 ms: un map.resize() inmediato medía el ancho de la mitad de
+    // la animación y el canvas quedaba angosto, dejando una franja muerta a la
+    // derecha hasta que alguien movía la ventana. El observador lo resuelve
+    // para todos los casos, incluida la ventana del navegador.
+    // El resize va diferido a un frame: hacerlo dentro del propio callback
+    // cambia el tamaño del canvas, que está DENTRO del elemento observado, y el
+    // navegador corta la notificación para no entrar en bucle. Diferido, el
+    // observador cubre todos los casos: abrir y cerrar el panel, la transición
+    // de 200 ms y el redimensionado de la ventana.
+    let pendiente = false;
+    new ResizeObserver(() => {
+        if (pendiente) return;
+        pendiente = true;
+        requestAnimationFrame(() => { pendiente = false; map.resize(); });
+    }).observe($('map'));
 
     map.on('mousemove', 'cuarteles-fill', onHover);
     map.on('mouseleave', 'cuarteles-fill', onLeave);
@@ -1442,29 +1470,141 @@ function pintarMetricas() {
 }
 
 /* ── Panel del modelo ───────────────────────────────────────────────────── */
+/* ═══ Panel lateral ════════════════════════════════════════════════════════
+   El panel acompaña a los cinco modos y muestra lo del modo: antes existía
+   sólo en Producción y Financiero, y en los otros tres quedaba una franja
+   muerta a la derecha del mapa. Cada modo trae su gráfico y su tabla. */
+
+const TITULO_PANEL = {
+    general: 'Composición del predio', produccion: 'Producción',
+    financiero: 'Financiero', terreno: 'Terreno', suelos: 'Suelos'
+};
+
+/* Los cuarteles dibujados de las ramas encendidas. Terreno y suelo se miden
+   por cuartel -el DEM y el plano clasifican polígonos, no variedades-, así que
+   sus repartos se cuentan en cuarteles y no en hectáreas: repartir las ha de
+   una variedad entre sus cuarteles exigiría un supuesto que nadie pidió. */
+const cuartelesVisibles = () => GEO.cuarteles.features
+    .map(f => f.properties)
+    .filter(p => visibles.has(vkey(p.especie, p.variedad)));
+
+/* Agregado por especie del KMZ, con las hectáreas del modelo. */
+function porEspecieVisible() {
+    const out = {};
+    cuartelesVisibles().forEach(p => {
+        const e = out[p.especie] || (out[p.especie] = {
+            especie: p.especie, cuarteles: 0, claves: new Set(),
+            pend: [], elev: [], prof: []
+        });
+        e.cuarteles++;
+        arr(p.modelo).forEach(k => e.claves.add(k));
+        if (p.pendiente != null) { e.pend.push(p.pendiente); e.elev.push(p.elev); }
+        const su = obj(p.suelo);
+        if (su) e.prof.push(su.prof_cm);
+    });
+    const media = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    return Object.values(out).map(e => ({
+        ...e,
+        ha: [...e.claves].reduce((a, k) => a + ((MIDX[k] || {}).ha || 0), 0),
+        pendiente: media(e.pend), elevacion: media(e.elev), profundidad: media(e.prof)
+    })).sort((a, b) => b.ha - a.ha);
+}
+
 function pintarPanel() {
     if (!document.body.classList.contains('panel-abierto')) return;
     const regs = clavesVisibles();
-    $('mpTitulo').textContent = modo === 'produccion' ? 'Producción' : 'Financiero';
-    // Sólo la temporada: las hectáreas encendidas ya están en la barra de métricas.
-    $('mpSub').textContent = MOD.temporadas[t];
+    $('mpTitulo').textContent = TITULO_PANEL[modo] || 'Modelo';
+    // Sólo la temporada, y sólo donde la hay: las hectáreas encendidas ya están
+    // en la barra de métricas.
+    $('mpSub').textContent = (modo === 'produccion' || modo === 'financiero')
+        ? MOD.temporadas[t] : GEO.farm.name;
+    // Las dos vistas de gráfico son de Producción y Financiero; en los demás
+    // modos hay una sola cosa que mostrar.
+    $('mpChartTabs').hidden = !(modo === 'produccion' || modo === 'financiero');
     dibujarGrafico(regs);
     pintarTabla(regs);
     pintarConciliacion();
 }
 
-/* Las columnas son las del modo: en Producción no tiene nada que hacer una
-   columna de margen, y en Financiero una de kg/ha compite con lo que el usuario
-   vino a mirar. Cinco columnas entran holgadas en los 392 px del panel; seis ya
-   obligaban a apretar los números. */
+/* ── Tabla ───────────────────────────────────────────────────────────────── */
 function pintarTabla(regs) {
+    if (modo === 'general' || modo === 'terreno') return tablaEspecies();
+    if (modo === 'suelos') return tablaSuelos();
+    return tablaVariedades(regs);
+}
+
+function filaTabla(cols, ordenar, filas) {
+    $('tabla').innerHTML = `
+        <thead><tr>${cols.map(c => `<th data-k="${c.k}" class="${
+            ordenTabla.campo === c.k ? 'orden' + (ordenTabla.asc ? ' asc' : '') : ''}">${c.t}</th>`).join('')}</tr></thead>
+        <tbody>${filas}</tbody>`;
+    $('tabla').querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+        const k = th.dataset.k;
+        ordenTabla = { campo: k, asc: ordenTabla.campo === k ? !ordenTabla.asc : k === 'variedad' || k === 'especie' };
+        ordenar();
+    }));
+}
+
+function ordenarPor(lista, campo, texto) {
+    return [...lista].sort((x, y) => {
+        const a = x[campo], b = y[campo];
+        const cmp = texto ? String(a).localeCompare(String(b), 'es') : (a || 0) - (b || 0);
+        return ordenTabla.asc ? cmp : -cmp;
+    });
+}
+
+function tablaEspecies() {
+    const terreno = modo === 'terreno';
+    const cols = terreno
+        ? [{ k: 'especie', t: 'Especie' }, { k: 'ha', t: 'ha' },
+           { k: 'pendiente', t: 'Pendiente' }, { k: 'elevacion', t: 'Elev. m' }]
+        : [{ k: 'especie', t: 'Especie' }, { k: 'cuarteles', t: 'Cuarteles' },
+           { k: 'ha', t: 'ha' }, { k: 'pct', t: '% predio' }];
+    if (!cols.some(c => c.k === ordenTabla.campo)) ordenTabla = { campo: 'ha', asc: false };
+
+    const datos = porEspecieVisible();
+    const total = datos.reduce((a, e) => a + e.ha, 0);
+    datos.forEach(e => { e.pct = total ? e.ha / total : 0; });
+    const filas = ordenarPor(datos, ordenTabla.campo, ordenTabla.campo === 'especie').map(e => `
+        <tr>
+            <td><i class="lg-dot" style="background:${COLOR_ESPECIE[e.especie] || css('--dat-sindato')}"></i>${esc(e.especie)}</td>
+            ${terreno
+                ? `<td>${nf(e.ha, 1)}</td><td>${nf(e.pendiente, 1)}%</td><td>${miles(e.elevacion)}</td>`
+                : `<td>${e.cuarteles}</td><td>${nf(e.ha, 1)}</td><td>${pct(e.pct)}</td>`}
+        </tr>`).join('');
+    filaTabla(cols, tablaEspecies, filas);
+}
+
+function tablaSuelos() {
+    const cols = [{ k: 'nombre', t: 'Tipo de suelo' }, { k: 'cuarteles', t: 'Cuarteles' },
+                  { k: 'prof_cm', t: '1er horiz.' }];
+    if (!cols.some(c => c.k === ordenTabla.campo)) ordenTabla = { campo: 'cuarteles', asc: false };
+
+    const cuenta = {};
+    cuartelesVisibles().forEach(p => {
+        const su = obj(p.suelo);
+        if (su) cuenta[su.clase] = (cuenta[su.clase] || 0) + 1;
+    });
+    const datos = GEO.suelos.simbologia.filter(s => cuenta[s.clase])
+        .map(s => ({ ...s, cuarteles: cuenta[s.clase] }));
+    const filas = ordenarPor(datos, ordenTabla.campo, ordenTabla.campo === 'nombre').map(s => `
+        <tr title="${esc(s.descripcion)}">
+            <td><i class="lg-dot" style="background:${s.color}"></i>${esc(s.nombre)}</td>
+            <td>${s.cuarteles}</td><td>${s.prof_cm}</td>
+        </tr>`).join('');
+    filaTabla(cols, tablaSuelos, filas);
+}
+
+/* Las columnas son las del modo: en Producción no tiene nada que hacer una
+   columna de margen, y en Financiero una de kg/ha compite con lo que el
+   usuario vino a mirar. */
+function tablaVariedades(regs) {
     const cols = modo === 'produccion'
         ? [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
            { k: 'rend_kg_ha', t: 'kg/ha' }, { k: 'produccion', t: 'Ton' }]
         : [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
            { k: 'costo_ha', t: 'Costo/ha' }, { k: 'ebitda_ha', t: 'EBITDA/ha' },
            { k: 'margen', t: 'Margen' }];
-
     if (!cols.some(c => c.k === ordenTabla.campo)) {
         ordenTabla = { campo: modo === 'produccion' ? 'rend_kg_ha' : 'ebitda_ha', asc: false };
     }
@@ -1480,31 +1620,19 @@ function pintarTabla(regs) {
         const a = valor(x, ordenTabla.campo), b = valor(y, ordenTabla.campo);
         const cmp = typeof a === 'string' ? a.localeCompare(b, 'es') : (a || 0) - (b || 0);
         return ordenTabla.asc ? cmp : -cmp;
-    });
-
-    $('tabla').innerHTML = `
-        <thead><tr>${cols.map(c => `<th data-k="${c.k}" class="${ordenTabla.campo === c.k ? 'orden' + (ordenTabla.asc ? ' asc' : '') : ''}">${c.t}</th>`).join('')}</tr></thead>
-        <tbody>${filas.map(v => {
-            const clave = vkey(v.especie, v.variedad);
-            const color = COLOR_VARIEDAD[VKEY_DE_MODELO[clave]] || css('--dat-sindato');
-            return `<tr data-variedad="${esc(clave)}">${cols.map((c, i) => {
-                const neg = (c.k === 'ebitda_ha' || c.k === 'margen') && valor(v, c.k) < 0;
-                return i === 0
-                    ? `<td><i class="lg-dot" style="background:${color}"></i>${celda(v, c.k)}</td>`
-                    : `<td class="${neg ? 'neg' : ''}">${celda(v, c.k)}</td>`;
-            }).join('')}</tr>`;
-        }).join('')}</tbody>`;
-
-    $('tabla').querySelectorAll('th').forEach(th => {
-        th.addEventListener('click', () => {
-            const k = th.dataset.k;
-            ordenTabla = { campo: k, asc: ordenTabla.campo === k ? !ordenTabla.asc : k === 'variedad' };
-            pintarTabla(clavesVisibles());
-        });
-    });
-    $('tabla').querySelectorAll('tbody tr').forEach(tr => {
-        tr.addEventListener('click', () => volarAVariedad(tr.dataset.variedad));
-    });
+    }).map(v => {
+        const clave = vkey(v.especie, v.variedad);
+        const color = COLOR_VARIEDAD[VKEY_DE_MODELO[clave]] || css('--dat-sindato');
+        return `<tr data-variedad="${esc(clave)}">${cols.map((c, i) => {
+            const neg = (c.k === 'ebitda_ha' || c.k === 'margen') && valor(v, c.k) < 0;
+            return i === 0
+                ? `<td><i class="lg-dot" style="background:${color}"></i>${celda(v, c.k)}</td>`
+                : `<td class="${neg ? 'neg' : ''}">${celda(v, c.k)}</td>`;
+        }).join('')}</tr>`;
+    }).join('');
+    filaTabla(cols, () => tablaVariedades(clavesVisibles()), filas);
+    $('tabla').querySelectorAll('tbody tr').forEach(tr =>
+        tr.addEventListener('click', () => volarAVariedad(tr.dataset.variedad)));
 }
 
 function pintarConciliacion() {
@@ -1524,7 +1652,13 @@ function pintarConciliacion() {
     }
     if (av.variedades_sin_cuartel && av.variedades_sin_cuartel.length) {
         partes.push('<div class="mp-aviso"><b>Sin polígono en el KMZ.</b> ' + av.variedades_sin_cuartel.map(esc).join(' y ') +
-            ' están en el modelo pero no tienen cuartel dibujado, así que no se pintan en el mapa aunque sí suman en los totales.</div>');
+            ' están en el modelo pero no tienen cuartel dibujado: suman en los totales y no se pintan.</div>');
+    }
+    if (GEO.suelos) {
+        const g = GEO.suelos.georreferencia;
+        partes.push('<div class="mp-aviso"><b>Suelos, cómo se cruzó.</b> El plano no viene georreferenciado: se ajustó con ' +
+            g.puntos_usados + ' de ' + g.puntos_totales + ' códigos de cuartel comunes, con un residuo mediano de ' +
+            nf(g.error_mediano_m, 0) + ' m. Cerca de un borde entre sectores, el tipo puede corresponder al vecino.</div>');
     }
     $('avisos').innerHTML = partes.join('');
 }
@@ -1537,9 +1671,7 @@ function volarAVariedad(clave) {
         { padding: relleno(), maxZoom: 16.5, duration: 800 });
 }
 
-/* ── Gráfico ────────────────────────────────────────────────────────────────
-   Dos vistas, un eje cada una. Nunca dos escalas en el mismo par de ejes: la
-   serie son tres magnitudes en US$ y el ranking una sola en US$/ha. */
+/* ── Gráficos ────────────────────────────────────────────────────────────── */
 const VIZ = { s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a' };
 
 /* Línea de cero marcada en el ranking: sin ella, en una escala divergente hay
@@ -1567,9 +1699,7 @@ function rangoY(valores) {
     const amplitud = (alto - bajo) || 1;
     // El paso se busca para ocho intervalos, no para cuatro. Con pasos gruesos
     // el piso cae muy por debajo del dato -un EBITDA de −0,17 M arrastraba el
-    // eje hasta −2 M y dejaba en blanco un quinto del gráfico-; con el paso
-    // fino el eje se ciñe y las etiquetas se ralean con maxTicksLimit, que
-    // adelgaza los rótulos sin tocar la grilla.
+    // eje hasta −2 M y dejaba en blanco un quinto del gráfico-.
     const decada = Math.pow(10, Math.floor(Math.log10(amplitud / 8)));
     const paso = [1, 2, 2.5, 5, 10].map(m => m * decada).find(x => amplitud / x <= 8) || decada * 10;
     return { min: Math.floor(bajo / paso) * paso, max: Math.ceil(alto / paso) * paso, paso };
@@ -1583,34 +1713,125 @@ function ejes() {
     };
 }
 
-/* Dos vistas, un eje cada una. La de temporada era una curva de veintiún puntos
-   que se aplanaba en el cuarto: diecisiete temporadas de línea recta para
-   contar que el modelo asume plena producción. En barras, y sólo con las
-   temporadas que cambian, se ve de un vistazo cuánto sube el EBITDA y cuánto
-   de los ingresos se lleva el costo. */
+const COMUN_CHART = () => ({
+    maintainAspectRatio: false,
+    // Sin animación. Chart.js dibuja las barras en su posición inicial y las
+    // lleva a la final con requestAnimationFrame; si la pestaña no está
+    // pintando, esos frames no llegan y el gráfico queda en blanco con los
+    // datos correctos por dentro. Además, al cambiar de modo el panel se
+    // rehace entero y la animación sólo agrega una espera.
+    animation: false,
+    plugins: {
+        legend: { display: false },
+        tooltip: {
+            backgroundColor: css('--sem-ink'), padding: 9, cornerRadius: 6,
+            titleFont: { family: 'Fira Sans', size: 11, weight: '600' },
+            bodyFont: { family: 'Fira Sans', size: 11 },
+            displayColors: false
+        }
+    }
+});
+
+/* Barras horizontales: una categoría por fila, con su color y su valor. Sirve
+   para los tres repartos -especie, pendiente y suelo- que sólo cambian en qué
+   miden. */
+function barrasHorizontales(cv, filas, fmt, titulo) {
+    const { base, tick } = ejes();
+    const r = rangoY(filas.map(f => f.valor));
+    return new Chart(cv, {
+        type: 'bar',
+        data: {
+            // El eje recorta los nombres largos por la izquierda cuando no le
+            // caben. Se truncan acá, con el nombre entero en el tooltip.
+            labels: filas.map(f => f.nombre.length > 30 ? f.nombre.slice(0, 29) + '…' : f.nombre),
+            datasets: [{
+                data: filas.map(f => f.valor),
+                backgroundColor: filas.map(f => f.color),
+                borderRadius: 3, borderSkipped: false,
+                categoryPercentage: 0.82, barPercentage: 0.9
+            }]
+        },
+        options: {
+            ...COMUN_CHART(), indexAxis: 'y',
+            layout: { padding: { right: 8 } },
+            plugins: {
+                ...COMUN_CHART().plugins,
+                tooltip: {
+                    ...COMUN_CHART().plugins.tooltip,
+                    callbacks: {
+                        title: it => filas[it[0].dataIndex].nombre,
+                        label: it => fmt(it.raw) + (filas[it.dataIndex].nota ? '  ·  ' + filas[it.dataIndex].nota : '')
+                    }
+                }
+            },
+            scales: {
+                // Sin maxTicksLimit: pisa al stepSize y devuelve cortes como 44
+                // o 131. Con el paso mandando, los rótulos salen redondos.
+                x: { ...base, min: r.min, max: r.max, title: { display: !!titulo, text: titulo, color: css('--viz-muted'), font: { family: 'Fira Sans', size: 10 } },
+                     ticks: { ...tick, stepSize: r.paso, maxRotation: 0, minRotation: 0, callback: fmt } },
+                y: { ...base, grid: { display: false }, ticks: { ...tick, autoSkip: false, font: { family: 'Fira Sans', size: 10 } } }
+            }
+        }
+    });
+}
+
 function dibujarGrafico(regs) {
     const cv = $('chart');
     if (grafico) { grafico.destroy(); grafico = null; }
-    // El ranking crece con las variedades encendidas: a altura fija, treinta y
-    // una etiquetas se pisan unas con otras.
-    cv.parentElement.style.height = vistaGrafico === 'ranking'
-        ? Math.max(200, regs.length * 16 + 44) + 'px' : '236px';
+    const alto = n => Math.max(180, n * 22 + 46) + 'px';
 
+    if (modo === 'general') {
+        const datos = porEspecieVisible();
+        cv.parentElement.style.height = alto(datos.length);
+        grafico = barrasHorizontales(cv,
+            datos.map(e => ({ nombre: e.especie, valor: +e.ha.toFixed(1),
+                              color: COLOR_ESPECIE[e.especie] || css('--dat-sindato'),
+                              nota: e.cuarteles + ' cuarteles' })),
+            v => nf(v, 0), 'hectáreas del modelo');
+        $('chartNota').textContent = 'Hectáreas por especie, según el modelo. La superficie del polígono no se usa.';
+        return;
+    }
+
+    if (modo === 'terreno') {
+        // El reparto se cuenta en cuarteles: el DEM clasifica polígonos, y
+        // repartir las hectáreas de una variedad entre sus cuarteles exigiría
+        // un supuesto de superficie que no tenemos.
+        const clases = ['Plano', 'Suave', 'Moderada', 'Fuerte', 'Muy fuerte', 'Escarpada'];
+        const tokens = ['--pen-1', '--pen-2', '--pen-3', '--pen-4', '--pen-5', '--pen-6'];
+        const cuenta = {};
+        cuartelesVisibles().forEach(p => {
+            if (p.pendiente_clase) cuenta[p.pendiente_clase] = (cuenta[p.pendiente_clase] || 0) + 1;
+        });
+        const datos = clases.map((c, i) => ({ nombre: c, valor: cuenta[c] || 0, color: css(tokens[i]) }))
+            .filter(d => d.valor);
+        cv.parentElement.style.height = alto(datos.length);
+        grafico = barrasHorizontales(cv, datos, v => nf(v, 0), 'cuarteles');
+        $('chartNota').textContent = 'Cuarteles por clase de pendiente. Sobre 15% cambia la maquinaria que entra; ' +
+            'sobre 25%, el sistema de plantación.';
+        return;
+    }
+
+    if (modo === 'suelos') {
+        const cuenta = {};
+        cuartelesVisibles().forEach(p => {
+            const su = obj(p.suelo);
+            if (su) cuenta[su.clase] = (cuenta[su.clase] || 0) + 1;
+        });
+        const datos = GEO.suelos.simbologia.filter(s => cuenta[s.clase])
+            .map(s => ({ nombre: s.nombre, valor: cuenta[s.clase], color: s.color, nota: s.prof_cm + ' cm de 1er horizonte' }))
+            .sort((a, b) => b.valor - a.valor);
+        cv.parentElement.style.height = alto(datos.length);
+        grafico = barrasHorizontales(cv, datos, v => nf(v, 0), 'cuarteles');
+        $('chartNota').textContent = 'Cuarteles por tipo de suelo, con los colores del plano de la hacienda.';
+        return;
+    }
+
+    // Producción y Financiero: dos vistas, por temporada y por variedad.
     const { base, tick } = ejes();
     const produccion = modo === 'produccion';
-    const comun = {
-        maintainAspectRatio: false,
-        animation: { duration: 220 },
-        plugins: {
-            tooltip: {
-                backgroundColor: css('--sem-ink'), padding: 9, cornerRadius: 6,
-                titleFont: { family: 'Fira Sans', size: 11, weight: '600' },
-                bodyFont: { family: 'Fira Sans', size: 11 },
-                displayColors: false
-            }
-        }
-    };
+    const comun = COMUN_CHART();
     const barra = { borderRadius: 3, borderSkipped: false, categoryPercentage: 0.7, barPercentage: 0.9 };
+    cv.parentElement.style.height = vistaGrafico === 'ranking' ? alto(regs.length * 0.73) : '236px';
 
     if (vistaGrafico === 'serie') {
         const idx = [...Array(UTILES).keys()];
@@ -1653,9 +1874,8 @@ function dibujarGrafico(regs) {
                 }
             }
         });
-        $('chartNota').textContent = produccion
-            ? 'Toneladas por temporada, hasta plena producción.'
-            : 'Millones de US$ por temporada, hasta plena producción.';
+        $('chartNota').textContent = (produccion ? 'Toneladas' : 'Millones de US$') +
+            ' por temporada, hasta plena producción.';
         return;
     }
 
@@ -1678,7 +1898,6 @@ function dibujarGrafico(regs) {
             layout: { padding: { right: 6 } },
             plugins: {
                 ...comun.plugins,
-                legend: { display: false },
                 tooltip: {
                     ...comun.plugins.tooltip,
                     callbacks: {
@@ -1722,7 +1941,7 @@ function construirSelectores() {
    nadie ha hecho clic, así que sin esto el botón Modelo quedaba visible y abría
    un panel financiero vacío. */
 function sincronizarControles() {
-    const conPanel = modo === 'produccion' || modo === 'financiero';
+    const conTemporada = modo === 'produccion' || modo === 'financiero';
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
     document.body.classList.toggle('modo-dato', modo !== 'general');
     $('grpColor').hidden = modo !== 'general';
@@ -1731,16 +1950,12 @@ function sincronizarControles() {
     $('grpSuelo').hidden = modo !== 'suelos';
     // El terreno y el suelo no cambian con la temporada: el selector sugeriría
     // que la pendiente se mueve entre 2025 y 2029.
-    $('grpTemporada').hidden = !conPanel;
-    $('btnPanel').hidden = !conPanel;
-    if (!conPanel && document.body.classList.contains('panel-abierto')) togglePanel(false);
-    return conPanel;
+    $('grpTemporada').hidden = !conTemporada;
 }
 
 function cambiarModo(nuevo) {
     modo = nuevo;
-    const conPanel = sincronizarControles();
-    if (conPanel && !document.body.classList.contains('panel-abierto')) togglePanel(true);
+    sincronizarControles();
     repintar();
 }
 
@@ -1748,6 +1963,8 @@ function togglePanel(abrir) {
     document.body.classList.toggle('panel-abierto', abrir);
     $('btnPanel').classList.toggle('abierta', abrir);
     if (abrir) pintarPanel();
+    // El ajuste fino del canvas lo hace el ResizeObserver cuando el contenedor
+    // termina de animar; éste es sólo para que el mapa reaccione de inmediato.
     map.resize();
 }
 
