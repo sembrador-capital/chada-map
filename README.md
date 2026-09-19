@@ -168,21 +168,31 @@ cerro no cambia entre 2025 y 2046.
 **Suelos** — tipo de suelo, con la simbología del plano, o profundidad del primer
 horizonte en una rampa ordinal propia.
 
-En Producción y Financiero se abre el panel **Modelo**, con:
+### Cada pantalla muestra lo suyo
 
-- los KPI de la temporada, sobre lo que esté encendido en la leyenda;
-- un gráfico con dos vistas: la serie 2025-2046 de ingresos, costos y EBITDA, y
-  el ranking de EBITDA/ha por variedad, con los mismos cortes y colores que el
-  mapa;
-- la tabla por variedad, ordenable, que además es la lectura alternativa
-  obligatoria para los colores que no alcanzan 3:1 de contraste;
-- la conciliación de superficie y los avisos de calidad de datos.
+La regla es que nada se diga dos veces. Los números de cabecera viven en la barra
+de métricas y no se repiten en el panel; la identidad del cuartel vive en la
+cabecera de la ficha y no se repite en su cuerpo.
 
-La ficha del cuartel —al pasar el cursor, clic para fijarla— trae especie,
-variedad, superficie del modelo, rendimiento, ingresos, costos, EBITDA y margen
-de la temporada elegida, más año de plantación, portainjerto, marco y plantas/ha
-de la tasación. En los cuarteles mixtos desglosa cada variedad con su cuartel y
-su EBITDA/ha.
+**La ficha del cuartel** —al pasar el cursor, clic para fijarla— trae la cabecera
+con especie, cuartel y variedad, y debajo **sólo el bloque del modo activo**:
+superficie y plantación en Vista general, rendimiento en Producción, ingresos y
+margen en Financiero, pendiente y exposición en Terreno, tipo y textura en
+Suelos. Antes apilaba los cinco bloques en todos los modos y llenaba media
+pantalla con datos que nadie había pedido.
+
+**El panel** se abre sólo en Producción y Financiero, y trae dos cosas: un
+gráfico con vista de serie y vista por variedad, y la tabla ordenable, cuyas
+columnas también cambian con el modo —kg/ha y toneladas en Producción; costo/ha,
+EBITDA/ha y margen en Financiero—. La conciliación de superficie y los avisos de
+calidad quedan en una sección plegada. La tabla es además la lectura alternativa
+obligatoria para los colores que no alcanzan 3:1 de contraste.
+
+Los gráficos calculan su propio rango de eje en vez de dejárselo al automático:
+con pasos gruesos, un EBITDA de −0,17 M arrastraba el eje hasta −2 M y dejaba en
+blanco un quinto del gráfico. Las series se identifican con la etiqueta pegada al
+final de su línea, que es un canal no-color; una caja de leyenda repetiría esos
+mismos tres nombres.
 
 ---
 

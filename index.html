@@ -384,11 +384,6 @@ body.panel-abierto .modelo-panel { display:flex; }
 .mp-sect-body { display:none; padding:2px 14px 14px; }
 .mp-sect.abierta .mp-sect-body { display:block; }
 
-.mp-kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px 14px; }
-.mp-kpi { padding:8px 10px; background:var(--sem-beige-wash); border-radius:var(--sem-radius); }
-.mp-kpi-val { font-size:17px; font-weight:600; line-height:1.15; color:var(--sem-navy); font-variant-numeric:tabular-nums; }
-.mp-kpi-val.neg { color:var(--neg-3); }
-.mp-kpi-lbl { font-size:9.5px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; color:var(--sem-text-2); margin-top:2px; }
 
 .mp-chart-tabs { display:flex; gap:2px; margin-bottom:10px; }
 .mp-chart-tab {
@@ -584,7 +579,7 @@ body.panel-abierto .data-stamp { right:408px; }
 <div class="modelo-panel" id="modeloPanel">
     <div class="mp-head">
         <div>
-            <div class="mp-title">Modelo financiero</div>
+            <div class="mp-title" id="mpTitulo">Modelo</div>
             <div class="mp-sub" id="mpSub"></div>
         </div>
         <button type="button" class="card-close" style="display:flex; position:static" id="mpCerrar" aria-label="Cerrar panel">
@@ -592,13 +587,12 @@ body.panel-abierto .data-stamp { right:408px; }
         </button>
     </div>
     <div class="mp-body">
-        <div class="mp-kpis" id="mpKpis"></div>
         <div class="mp-sect abierta" id="sectGrafico">
             <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Gráfico</button>
             <div class="mp-sect-body">
                 <div class="mp-chart-tabs">
-                    <button type="button" class="mp-chart-tab active" data-vista="serie">Serie 2025-2046</button>
-                    <button type="button" class="mp-chart-tab" data-vista="ranking">EBITDA/ha por variedad</button>
+                    <button type="button" class="mp-chart-tab active" data-vista="serie">Serie</button>
+                    <button type="button" class="mp-chart-tab" data-vista="ranking" id="tabRanking">Por variedad</button>
                 </div>
                 <div class="mp-chart-wrap"><canvas id="chart"></canvas></div>
                 <div class="mp-chart-nota" id="chartNota"></div>
@@ -826,7 +820,6 @@ Promise.all([
     construirDatalist();
     $('dataStamp').textContent = 'KMZ ' + (GEO.generated_at || '').slice(0, 10) +
         ' · Modelo ' + (MOD.generated_at || '').slice(0, 10);
-    $('mpSub').textContent = MOD.source;
     if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
 }).catch(e => { $('loader').textContent = 'No se pudieron cargar los datos: ' + e.message; });
 
@@ -1058,103 +1051,103 @@ function desfijar() { setEstado(fijado, 'fijo', false); fijado = null; ocultarFi
 const arr = v => { try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch (_) { return []; } };
 const obj = v => { try { return typeof v === 'string' ? JSON.parse(v) : (v || null); } catch (_) { return null; } };
 
+/* La ficha muestra SOLO lo de la pestaña activa. Apilar modelo, terreno y suelo
+   en todos los modos llenaba media pantalla con datos que nadie había pedido, y
+   repetía dentro del cuerpo la especie y la variedad que ya están en la
+   cabecera. Cada modo trae su bloque y sus avisos; nada más. */
 function mostrarFicha(p, punto, fija = false) {
     const card = $('card');
-    const variedades = arr(p.variedades), cuarteles = arr(p.cuarteles), claves = arr(p.modelo);
-    const color = colorCuartel(p);
-
-    const regs = claves.map(k => MIDX[k]).filter(Boolean);
-    const haModelo = regs.reduce((a, v) => a + v.ha, 0);
-    const temporada = MOD.temporadas[t];
-
-    let bloqueModelo = '';
-    if (regs.length) {
-        const eb = valorCuartel(p, 'ebitda_ha', t), co = valorCuartel(p, 'costo_ha', t);
-        const ing = valorCuartel(p, 'ingreso_ha', t), mg = valorCuartel(p, 'margen', t);
-        const rd = valorCuartel(p, 'rend_kg_ha', t);
-        const signo = x => x == null ? '' : (x < 0 ? ' neg' : ' pos');
-        bloqueModelo = `
-            <div class="card-sec">
-                <div class="card-sec-tit">Modelo · ${esc(temporada)}</div>
-                <div class="card-kv"><span class="card-k">Rendimiento</span><span class="card-v">${miles(rd)} kg/ha</span></div>
-                <div class="card-kv"><span class="card-k">Ingresos</span><span class="card-v">${usd(ing)}/ha</span></div>
-                <div class="card-kv"><span class="card-k">Costos</span><span class="card-v">${usd(co)}/ha</span></div>
-                <div class="card-kv"><span class="card-k">EBITDA</span><span class="card-v${signo(eb)}">${usd(eb)}/ha</span></div>
-                <div class="card-kv"><span class="card-k">Margen</span><span class="card-v${signo(mg)}">${pct(mg)}</span></div>
-            </div>`;
-    }
-
+    const variedades = arr(p.variedades), cuarteles = arr(p.cuarteles);
+    const regs = arr(p.modelo).map(k => MIDX[k]).filter(Boolean);
     const su = obj(p.suelo);
-    const bloqueSuelo = !su ? '' : `
-        <div class="card-sec">
-            <div class="card-sec-tit">Suelo</div>
-            <div class="card-kv"><span class="card-k">Tipo</span><span class="card-v">${esc((SUELO[su.clase] || {}).nombre || su.clase)}</span></div>
-            <div class="card-kv"><span class="card-k">Textura superficial</span><span class="card-v">${esc(su.textura)}</span></div>
-            <div class="card-kv"><span class="card-k">1er horizonte</span><span class="card-v">${miles(su.prof_cm)} cm</span></div>
-            <div class="card-kv"><span class="card-k">Pedregosidad</span><span class="card-v">${esc(su.pedregosidad)}</span></div>
-            <div class="card-suelo-desc">${esc(su.descripcion)}</div>
-            ${su.mezcla && su.mezcla.length > 1 ? `<div class="card-sec-tit" style="margin-top:3px">Mezcla del cuartel</div>` +
-                su.mezcla.filter(m => m.pct >= 0.02).map(m =>
-                    `<div class="card-chip"><span><i class="lg-dot" style="display:inline-block;vertical-align:-1px;margin-right:5px;background:${(SUELO[m.clase] || {}).color}"></i>${esc((SUELO[m.clase] || {}).nombre || m.clase)}</span><span>${pct(m.pct)}</span></div>`).join('') : ''}
-        </div>`;
 
-    const bloqueTerreno = p.pendiente == null ? '' : `
-        <div class="card-sec">
-            <div class="card-sec-tit">Terreno</div>
-            <div class="card-kv"><span class="card-k">Pendiente media</span><span class="card-v">${nf(p.pendiente, 1)}% · ${esc(p.pendiente_clase)}</span></div>
-            <div class="card-kv"><span class="card-k">Pendiente p90</span><span class="card-v">${nf(p.pendiente_p90, 1)}%</span></div>
-            <div class="card-kv"><span class="card-k">Elevación</span><span class="card-v">${miles(p.elev)} m · ${miles(p.elev_min)}–${miles(p.elev_max)}</span></div>
-            <div class="card-kv"><span class="card-k">Exposición</span><span class="card-v">${esc(p.exposicion || '—')}${p.exposicion_grados != null ? ' · ' + nf(p.exposicion_grados, 0) + '°' : ''}</span></div>
-        </div>`;
+    const signo = x => x == null ? '' : (x < 0 ? ' neg' : ' pos');
+    const kv = (k, v, cls = '') => `<div class="card-kv"><span class="card-k">${k}</span><span class="card-v${cls}">${v}</span></div>`;
+    const chip = (a, b) => `<div class="card-chip"><span>${a}</span><span>${b}</span></div>`;
+    const sec = (tit, html) => html ? `<div class="card-sec"><div class="card-sec-tit">${tit}</div>${html}</div>` : '';
 
-    let bloqueVariedades = '';
-    if (regs.length > 1 || variedades.length > 1) {
-        bloqueVariedades = '<div class="card-sec"><div class="card-sec-tit">Variedades del cuartel</div>' +
-            regs.map(v => `<div class="card-chip"><span>${esc(v.variedad)}</span><span>${nf(v.ha, 2)} ha · ${usd(v.ebitda_ha[t])}/ha</span></div>`).join('') +
-            '</div>';
-    } else if (regs.length === 1) {
-        const v = regs[0];
-        const pl = v.plantaciones && v.plantaciones.length ? v.plantaciones : null;
-        // La tasación anota "-" donde no registró portainjerto (toda la
-        // vinífera): es un hueco, no un nombre, y no debe llegar a la ficha.
+    let cuerpo = '';
+    const avisos = [];
+
+    if (modo === 'general') {
+        const ha = regs.reduce((a, v) => a + v.ha, 0);
+        const uno = regs.length === 1 ? regs[0] : null;
+        const pl = uno && uno.plantaciones && uno.plantaciones.length ? uno.plantaciones : null;
+        // La tasación anota "-" donde no registró portainjerto: es un hueco.
         const patrones = pl ? [...new Set(pl.map(b => b.portainjerto).filter(x => x && x !== '-'))] : [];
-        bloqueVariedades = `
-            <div class="card-sec">
-                <div class="card-sec-tit">Variedad</div>
-                <div class="card-kv"><span class="card-k">Superficie (modelo)</span><span class="card-v">${nf(v.ha, 2)} ha</span></div>
-                <div class="card-kv"><span class="card-k">Año de plantación</span><span class="card-v">${esc(v.anio_plantacion || '—')}</span></div>
-                <div class="card-kv"><span class="card-k">Cuarteles</span><span class="card-v">${v.cuarteles.length}</span></div>
-                ${patrones.length ? `<div class="card-kv"><span class="card-k">Portainjerto</span><span class="card-v">${esc(patrones.join(', '))}</span></div>` : ''}
-                ${pl ? `<div class="card-kv"><span class="card-k">Plantas/ha</span><span class="card-v">${miles(pl[0].plantas_ha)}</span></div>
-                        <div class="card-kv"><span class="card-k">Marco</span><span class="card-v">${esc(pl[0].marco || '—')}</span></div>` : ''}
-                ${v.plantaciones_nota ? `<div class="card-nota">${esc(v.plantaciones_nota)}</div>` : ''}
-            </div>`;
-    }
+        cuerpo =
+            (regs.length ? kv('Superficie', nf(ha, 2) + ' ha') : '') +
+            (uno ? kv('Plantación', esc(uno.anio_plantacion || '—')) +
+                   (patrones.length ? kv('Portainjerto', esc(patrones.join(', '))) : '') +
+                   (pl ? kv('Marco', esc(pl[0].marco || '—')) : '') : '') +
+            (p.nota ? `<div class="card-nota">${esc(p.nota)}</div>` : '') +
+            (variedades.length > 1
+                ? sec('Variedades del cuartel', variedades.map((v, i) => chip(esc(v), esc(cuarteles[i] || '—'))).join(''))
+                : '');
+        if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
+        if (p.aprox) avisos.push('Cruce aproximado: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
 
-    const alertas = [];
-    if (!regs.length) alertas.push('Sin contraparte en el modelo financiero: el KMZ lo agrupa como <b>Disponible</b> (arrancado o no productivo). Es parte de las 311,65 ha de tasación, no de las 292,23 ha modeladas.');
-    if (p.aprox) alertas.push('Cruce aproximado con el modelo: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
-    if (su && su.pct < 0.6) alertas.push('El cuartel cruza dos sectores de suelo sin que ninguno mande: la mezcla de arriba es la lectura buena, no el tipo dominante.');
-    if (regs.some(v => v.produccion_libro)) alertas.push('La producción de esta variedad se despejó desde los ingresos: el bloque PRODUCCIÓN del libro trae corridas las filas de Uva Vinífera. Ingresos, costos y EBITDA no están afectados.');
+    } else if (modo === 'produccion') {
+        const ultima = MOD.temporadas.length - 1;
+        const cajas = regs.some(v => (v.kg_por_unidad || 1) > 1);
+        const hoy = valorCuartel(p, 'rend_kg_ha', t), plena = valorCuartel(p, 'rend_kg_ha', ultima);
+        // La fila de plena producción sólo aparece si dice algo distinto: en una
+        // variedad ya adulta repetiría el mismo número dos veces.
+        cuerpo =
+            kv('Rendimiento', miles(hoy) + ' kg/ha') +
+            (Math.round(plena) !== Math.round(hoy) ? kv('En plena producción', miles(plena) + ' kg/ha') : '') +
+            (cajas ? `<div class="card-suelo-desc">El modelo lleva esta variedad en cajas de 8,2 kg; acá va convertido.</div>` : '') +
+            (regs.length > 1 ? sec('Por variedad', regs.map(v =>
+                chip(esc(v.variedad), miles(v.rend_kg_ha[t]) + ' kg/ha')).join('')) : '');
+        if (regs.some(v => v.produccion_libro)) avisos.push('Producción despejada desde los ingresos: el bloque del libro trae corridas las filas de Uva Vinífera.');
+
+    } else if (modo === 'financiero') {
+        const eb = valorCuartel(p, 'ebitda_ha', t), mg = valorCuartel(p, 'margen', t);
+        cuerpo = regs.length
+            ? kv('Ingresos', usd(valorCuartel(p, 'ingreso_ha', t)) + '/ha') +
+              kv('Costos', usd(valorCuartel(p, 'costo_ha', t)) + '/ha') +
+              kv('EBITDA', usd(eb) + '/ha', signo(eb)) +
+              kv('Margen', pct(mg), signo(mg)) +
+              (regs.length > 1 ? sec('Por variedad', regs.map(v =>
+                  chip(esc(v.variedad), usd(v.ebitda_ha[t]) + '/ha')).join('')) : '')
+            : '';
+        if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
+
+    } else if (modo === 'terreno') {
+        cuerpo =
+            kv('Pendiente', nf(p.pendiente, 1) + '% · ' + esc(p.pendiente_clase)) +
+            kv('Pendiente p90', nf(p.pendiente_p90, 1) + '%') +
+            kv('Elevación', miles(p.elev) + ' m') +
+            kv('Rango', miles(p.elev_min) + '–' + miles(p.elev_max) + ' m') +
+            kv('Exposición', esc(p.exposicion || '—'));
+
+    } else if (modo === 'suelos') {
+        cuerpo = su
+            ? kv('Tipo', esc((SUELO[su.clase] || {}).nombre || su.clase)) +
+              kv('Textura', esc(su.textura)) +
+              kv('1er horizonte', miles(su.prof_cm) + ' cm') +
+              kv('Pedregosidad', esc(su.pedregosidad)) +
+              `<div class="card-suelo-desc">${esc(su.descripcion)}</div>` +
+              (su.mezcla && su.mezcla.length > 1
+                  ? sec('Mezcla del cuartel', su.mezcla.filter(m => m.pct >= 0.02).map(m =>
+                        chip(`<i class="lg-dot" style="display:inline-block;vertical-align:-1px;margin-right:5px;background:${(SUELO[m.clase] || {}).color}"></i>` +
+                             esc((SUELO[m.clase] || {}).nombre || m.clase), pct(m.pct))).join(''))
+                  : '')
+            : '';
+        if (su && su.pct < 0.6) avisos.push('Cruza dos sectores sin que ninguno mande: la lectura buena es la mezcla, no el tipo dominante.');
+    }
 
     card.innerHTML = `
         <div class="card-head">
-            <div class="card-especie"><i class="lg-dot" style="background:${color}"></i>${esc(p.especie)}</div>
+            <div class="card-especie"><i class="lg-dot" style="background:${colorCuartel(p)}"></i>${esc(p.especie)}</div>
             <div class="card-cuartel">Cuartel ${esc(p.cuartel)}</div>
             <div class="card-variedad">${esc(variedades.length > 1 ? variedades.join(' · ') : p.variedad)}</div>
             <button type="button" class="card-close" id="cardClose" aria-label="Cerrar"><svg viewBox="0 0 18 18" width="13" height="13"><use href="#ic-cerrar"/></svg></button>
         </div>
         <div class="card-body">
-            ${regs.length ? `<div class="card-kv"><span class="card-k">Superficie del modelo</span><span class="card-v">${nf(haModelo, 2)} ha</span></div>` : ''}
-            ${p.nota ? `<div class="card-nota">${esc(p.nota)}</div>` : ''}
-            ${modo === 'suelos' ? bloqueSuelo + bloqueTerreno + bloqueModelo
-              : modo === 'terreno' ? bloqueTerreno + bloqueSuelo + bloqueModelo
-              : bloqueModelo + bloqueTerreno + bloqueSuelo}
-            ${bloqueVariedades}
-            ${variedades.length > 1 ? `<div class="card-sec"><div class="card-sec-tit">Detalle del cuartel mixto</div>${
-                variedades.map((v, i) => `<div class="card-chip"><span>${esc(v)}</span><span>${esc(cuarteles[i] || '—')}</span></div>`).join('')}</div>` : ''}
-            ${alertas.map(a => `<div class="card-alerta">${a}</div>`).join('')}
-            <div class="card-hint">${fija ? 'Ficha fijada · clic fuera para soltarla' : 'Clic para fijar esta ficha'}</div>
+            ${cuerpo}
+            ${avisos.map(a => `<div class="card-alerta">${a}</div>`).join('')}
+            <div class="card-hint">${fija ? 'Clic fuera para soltar' : 'Clic para fijar'}</div>
         </div>`;
 
     card.classList.toggle('fija', fija);
@@ -1399,27 +1392,38 @@ function pintarMetricas() {
 /* ── Panel del modelo ───────────────────────────────────────────────────── */
 function pintarPanel() {
     if (!document.body.classList.contains('panel-abierto')) return;
-    const regs = clavesVisibles(), a = agregado(regs, t);
-    $('mpKpis').innerHTML = `
-        <div class="mp-kpi"><div class="mp-kpi-val${a.ebitda < 0 ? ' neg' : ''}">${usd(a.ebitda)}</div><div class="mp-kpi-lbl">EBITDA ${esc(MOD.temporadas[t])}</div></div>
-        <div class="mp-kpi"><div class="mp-kpi-val${a.ebitda_ha < 0 ? ' neg' : ''}">${usd(a.ebitda_ha)}</div><div class="mp-kpi-lbl">EBITDA por hectárea</div></div>
-        <div class="mp-kpi"><div class="mp-kpi-val">${usd(a.ingresos)}</div><div class="mp-kpi-lbl">Ingresos</div></div>
-        <div class="mp-kpi"><div class="mp-kpi-val">${usd(a.costos)}</div><div class="mp-kpi-lbl">Costos</div></div>`;
+    const regs = clavesVisibles();
+    $('mpTitulo').textContent = modo === 'produccion' ? 'Producción' : 'Financiero';
+    // Sólo la temporada: las hectáreas encendidas ya están en la barra de métricas.
+    $('mpSub').textContent = MOD.temporadas[t];
     dibujarGrafico(regs);
     pintarTabla(regs);
     pintarConciliacion();
 }
 
+/* Las columnas son las del modo: en Producción no tiene nada que hacer una
+   columna de margen, y en Financiero una de kg/ha compite con lo que el usuario
+   vino a mirar. Cinco columnas entran holgadas en los 392 px del panel; seis ya
+   obligaban a apretar los números. */
 function pintarTabla(regs) {
-    const cols = [
-        { k: 'variedad', t: 'Variedad', fmt: v => esc(v.variedad) },
-        { k: 'ha', t: 'ha', fmt: v => nf(v.ha, 1) },
-        { k: 'rend_kg_ha', t: 'kg/ha', fmt: v => miles(v.rend_kg_ha[t]) },
-        { k: 'costo_ha', t: 'Costo/ha', fmt: v => miles(v.costo_ha[t]) },
-        { k: 'ebitda_ha', t: 'EBITDA/ha', fmt: v => miles(v.ebitda_ha[t]) },
-        { k: 'margen', t: 'Margen', fmt: v => pct(v.margen[t]) }
-    ];
+    const cols = modo === 'produccion'
+        ? [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
+           { k: 'rend_kg_ha', t: 'kg/ha' }, { k: 'produccion', t: 'Ton' }]
+        : [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
+           { k: 'costo_ha', t: 'Costo/ha' }, { k: 'ebitda_ha', t: 'EBITDA/ha' },
+           { k: 'margen', t: 'Margen' }];
+
+    if (!cols.some(c => c.k === ordenTabla.campo)) {
+        ordenTabla = { campo: modo === 'produccion' ? 'rend_kg_ha' : 'ebitda_ha', asc: false };
+    }
     const valor = (v, k) => k === 'variedad' ? v.variedad : (Array.isArray(v[k]) ? v[k][t] : v[k]);
+    const celda = (v, k) => {
+        if (k === 'variedad') return esc(v.variedad);
+        if (k === 'ha') return nf(v.ha, 1);
+        if (k === 'margen') return pct(v.margen[t]);
+        if (k === 'produccion') return miles((v.produccion[t] || 0) * (v.kg_por_unidad || 1) / 1000);
+        return miles(v[k][t]);
+    };
     const filas = [...regs].sort((x, y) => {
         const a = valor(x, ordenTabla.campo), b = valor(y, ordenTabla.campo);
         const cmp = typeof a === 'string' ? a.localeCompare(b, 'es') : (a || 0) - (b || 0);
@@ -1431,14 +1435,12 @@ function pintarTabla(regs) {
         <tbody>${filas.map(v => {
             const clave = vkey(v.especie, v.variedad);
             const color = COLOR_VARIEDAD[VKEY_DE_MODELO[clave]] || css('--dat-sindato');
-            return `<tr data-variedad="${esc(clave)}">
-                <td><i class="lg-dot" style="background:${color}"></i>${esc(v.variedad)}</td>
-                <td>${nf(v.ha, 1)}</td>
-                <td>${miles(v.rend_kg_ha[t])}</td>
-                <td>${miles(v.costo_ha[t])}</td>
-                <td class="${v.ebitda_ha[t] < 0 ? 'neg' : ''}">${miles(v.ebitda_ha[t])}</td>
-                <td class="${v.margen[t] < 0 ? 'neg' : ''}">${pct(v.margen[t])}</td>
-            </tr>`;
+            return `<tr data-variedad="${esc(clave)}">${cols.map((c, i) => {
+                const neg = (c.k === 'ebitda_ha' || c.k === 'margen') && valor(v, c.k) < 0;
+                return i === 0
+                    ? `<td><i class="lg-dot" style="background:${color}"></i>${celda(v, c.k)}</td>`
+                    : `<td class="${neg ? 'neg' : ''}">${celda(v, c.k)}</td>`;
+            }).join('')}</tr>`;
         }).join('')}</tbody>`;
 
     $('tabla').querySelectorAll('th').forEach(th => {
@@ -1488,105 +1490,194 @@ function volarAVariedad(clave) {
    serie son tres magnitudes en US$ y el ranking una sola en US$/ha. */
 const VIZ = { s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a' };
 
-/* Etiqueta directa al final de cada línea: con tres series la leyenda sola
-   obliga a ir y volver entre el color y el nombre. */
+/* Etiqueta directa al final de cada línea: con tres series, la caja de leyenda
+   sola obliga a ir y volver entre el color y el nombre. */
 const etiquetasAlFinal = {
     id: 'etiquetasAlFinal',
     afterDatasetsDraw(ch) {
         const { ctx } = ch;
         ctx.save();
-        ctx.font = '500 10px "Fira Sans", sans-serif';
+        ctx.font = '600 10px "Fira Sans", sans-serif';
         ctx.textBaseline = 'middle';
+        // Dos series que terminan casi al mismo nivel dejarian sus etiquetas
+        // encimadas: se separan lo minimo para que ambas se lean.
+        const puestas = [];
         ch.data.datasets.forEach((ds, i) => {
             const meta = ch.getDatasetMeta(i);
             if (meta.hidden) return;
             const pt = meta.data[meta.data.length - 1];
             if (!pt) return;
+            let y = pt.y;
+            while (puestas.some(v => Math.abs(v - y) < 11)) y += 11;
+            puestas.push(y);
             ctx.fillStyle = ds.borderColor;
-            ctx.fillText(ds.label, Math.min(pt.x + 5, ch.chartArea.right - 46), pt.y);
+            ctx.fillText(ds.label, Math.min(pt.x + 6, ch.chartArea.right - 44), y);
         });
         ctx.restore();
     }
 };
 
+/* Línea de cero marcada en el ranking: sin ella, en una escala divergente hay
+   que adivinar dónde una barra deja de sumar y empieza a restar. */
+const lineaCero = {
+    id: 'lineaCero',
+    afterDatasetsDraw(ch) {
+        const x = ch.scales.x.getPixelForValue(0);
+        const { ctx, chartArea } = ch;
+        ctx.save();
+        ctx.strokeStyle = css('--sem-ink');
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.restore();
+    }
+};
+
+/* Rango del eje Y calculado, no heredado del automatico de Chart.js: con
+   maxTicksLimit el algoritmo elige pasos redondos hacia afuera y deja franjas
+   enteras vacias -para datos de -0,2M a 6,6M llegaba a dibujar de -5M a 10M-.
+   Aca el paso sale de la amplitud real y se redondea a 1, 2, 2,5 o 5 por
+   decada, que son los cortes que la vista lee sin pensar. */
+function rangoY(valores) {
+    const v = valores.filter(x => x != null && isFinite(x));
+    if (!v.length) return {};
+    const alto = Math.max(...v), bajo = Math.min(0, ...v);
+    const amplitud = (alto - bajo) || 1;
+    // El paso se busca para ocho intervalos, no para cuatro. Con pasos gruesos
+    // el piso cae muy por debajo del dato -un EBITDA de −0,17 M arrastraba el
+    // eje hasta −2 M y dejaba en blanco un quinto del gráfico-; con el paso
+    // fino el eje se ciñe y las etiquetas se ralean con maxTicksLimit, que
+    // adelgaza los rótulos sin tocar la grilla.
+    const decada = Math.pow(10, Math.floor(Math.log10(amplitud / 8)));
+    const paso = [1, 2, 2.5, 5, 10].map(m => m * decada).find(x => amplitud / x <= 8) || decada * 10;
+    return { min: Math.floor(bajo / paso) * paso, max: Math.ceil(alto / paso) * paso, paso };
+}
+
+function ejes() {
+    const tick = { color: css('--viz-muted'), font: { family: 'Fira Sans', size: 10 } };
+    return {
+        base: { grid: { color: css('--viz-grid'), drawTicks: false }, border: { color: css('--viz-axis') }, ticks: tick },
+        tick
+    };
+}
+
 function dibujarGrafico(regs) {
     const cv = $('chart');
     if (grafico) { grafico.destroy(); grafico = null; }
     // El ranking crece con las variedades encendidas: a altura fija, treinta y
-    // una etiquetas se pisan unas con otras y el gráfico deja de leerse.
+    // una etiquetas se pisan unas con otras.
     cv.parentElement.style.height = vistaGrafico === 'ranking'
-        ? Math.max(200, regs.length * 15 + 46) + 'px' : '250px';
+        ? Math.max(200, regs.length * 16 + 44) + 'px' : '236px';
 
-    const ejeComun = {
-        grid: { color: css('--viz-grid'), drawTicks: false },
-        border: { color: css('--viz-axis') },
-        ticks: { color: css('--viz-muted'), font: { family: 'Fira Sans', size: 10 } }
+    const { base, tick } = ejes();
+    const comun = {
+        maintainAspectRatio: false,
+        animation: { duration: 220 },
+        plugins: {
+            tooltip: {
+                backgroundColor: css('--sem-ink'), padding: 9, cornerRadius: 6,
+                titleFont: { family: 'Fira Sans', size: 11, weight: '600' },
+                bodyFont: { family: 'Fira Sans', size: 11 },
+                displayColors: false
+            }
+        }
     };
+    const produccion = modo === 'produccion';
+    const ton = i => regs.reduce((a, v) => a + (v.produccion[i] || 0) * (v.kg_por_unidad || 1), 0) / 1000;
 
     if (vistaGrafico === 'serie') {
-        const serie = campo => MOD.temporadas.map((_, i) => agregado(regs, i)[campo]);
+        // Las etiquetas del eje x se pintan cada tres temporadas: veintiuna
+        // seguidas se solapan y el eje deja de leerse.
+        const labels = MOD.temporadas.map(s => s.slice(2, 4) + '/' + s.slice(7, 9));
+        const datasets = produccion
+            ? [{ label: 'Producción', data: MOD.temporadas.map((_, i) => ton(i)), borderColor: VIZ.s1, backgroundColor: VIZ.s1 }]
+            : [{ label: 'Ingresos', data: MOD.temporadas.map((_, i) => agregado(regs, i).ingresos), borderColor: VIZ.s1, backgroundColor: VIZ.s1 },
+               { label: 'Costos',   data: MOD.temporadas.map((_, i) => agregado(regs, i).costos),   borderColor: VIZ.s2, backgroundColor: VIZ.s2 },
+               { label: 'EBITDA',   data: MOD.temporadas.map((_, i) => agregado(regs, i).ebitda),   borderColor: VIZ.s3, backgroundColor: VIZ.s3 }];
+
         grafico = new Chart(cv, {
             type: 'line',
-            data: {
-                labels: MOD.temporadas.map(s => s.slice(2, 4) + '-' + s.slice(7, 9)),
-                datasets: [
-                    { label: 'Ingresos', data: serie('ingresos'), borderColor: VIZ.s1, backgroundColor: VIZ.s1 },
-                    { label: 'Costos',   data: serie('costos'),   borderColor: VIZ.s2, backgroundColor: VIZ.s2 },
-                    { label: 'EBITDA',   data: serie('ebitda'),   borderColor: VIZ.s3, backgroundColor: VIZ.s3 }
-                ].map(d => ({ ...d, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4.5, tension: 0.15 }))
-            },
+            data: { labels, datasets: datasets.map(d => ({ ...d, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4.5, tension: 0.2 })) },
             options: {
-                maintainAspectRatio: false,
-                layout: { padding: { right: 48 } },
+                ...comun,
+                layout: { padding: { right: produccion ? 8 : 46, top: 4 } },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: 'circle', color: css('--sem-text-2'), font: { family: 'Fira Sans', size: 10 } } },
+                    ...comun.plugins,
+                    // La identidad de cada serie va escrita al final de su línea,
+                    // que es un canal no-color y además no obliga a mirar dos
+                    // veces. Una caja de leyenda repetiría esos tres nombres.
+                    legend: { display: false },
                     tooltip: {
+                        ...comun.plugins.tooltip,
                         callbacks: {
                             title: it => MOD.temporadas[it[0].dataIndex],
-                            label: it => it.dataset.label + ': ' + usd(it.raw)
+                            label: it => it.dataset.label + ': ' + (produccion ? nf(it.raw, 0) + ' t' : usd(it.raw))
                         }
                     }
                 },
                 scales: {
-                    x: ejeComun,
-                    y: { ...ejeComun, ticks: { ...ejeComun.ticks, callback: v => (v / 1e6).toFixed(1) + 'M' } }
+                    x: { ...base, grid: { display: false }, ticks: { ...tick, autoSkip: false, maxRotation: 0, minRotation: 0, callback: (v, i) => i % 4 === 0 ? labels[i] : '' } },
+                    y: (() => {
+                        const r = rangoY(datasets.flatMap(d => d.data));
+                        return { ...base, min: r.min, max: r.max,
+                                 ticks: { ...tick, stepSize: r.paso, maxTicksLimit: 6,
+                                          callback: v => produccion ? nf(v / 1000, 0) + 'k t' : nf(v / 1e6, 1) + 'M' } };
+                    })()
                 }
             },
-            plugins: [etiquetasAlFinal]
+            plugins: produccion ? [] : [etiquetasAlFinal]
         });
-        $('chartNota').textContent = 'Millones de US$ por temporada, sobre las ' + nf(agregado(regs, t).ha, 1) +
-            ' ha encendidas en la leyenda. La serie se aplana en 2028-2029: de ahí en adelante el modelo asume plena producción.';
+        $('chartNota').textContent = (produccion ? 'Toneladas' : 'Millones de US$') +
+            ' por temporada. Se aplana en 2028-2029: de ahí en adelante el modelo asume plena producción.';
         return;
     }
 
-    const filas = [...regs].sort((a, b) => (a.ebitda_ha[t] || 0) - (b.ebitda_ha[t] || 0));
+    const campo = produccion ? 'rend_kg_ha' : 'ebitda_ha';
+    const escala = produccion ? ESCALAS.rend_kg_ha : ESCALAS.ebitda_ha;
+    const filas = [...regs].sort((a, b) => (a[campo][t] || 0) - (b[campo][t] || 0));
     grafico = new Chart(cv, {
         type: 'bar',
         data: {
             labels: filas.map(v => v.variedad),
             datasets: [{
-                label: 'EBITDA/ha',
-                data: filas.map(v => v.ebitda_ha[t]),
-                backgroundColor: filas.map(v => colorEscala(v.ebitda_ha[t], ESCALAS.ebitda_ha)),
-                borderRadius: 4, borderSkipped: false,
-                categoryPercentage: 0.82, barPercentage: 0.9
+                data: filas.map(v => v[campo][t]),
+                backgroundColor: filas.map(v => colorEscala(v[campo][t], escala)),
+                borderRadius: 3, borderSkipped: false,
+                categoryPercentage: 0.84, barPercentage: 0.88
             }]
         },
         options: {
-            indexAxis: 'y', maintainAspectRatio: false,
+            ...comun, indexAxis: 'y',
+            layout: { padding: { right: 6 } },
             plugins: {
+                ...comun.plugins,
                 legend: { display: false },
-                tooltip: { callbacks: { label: it => usd(it.raw) + '/ha · ' + nf(filas[it.dataIndex].ha, 1) + ' ha' } }
+                tooltip: {
+                    ...comun.plugins.tooltip,
+                    callbacks: {
+                        title: it => filas[it[0].dataIndex].variedad,
+                        label: it => (produccion ? miles(it.raw) + ' kg/ha' : usd(it.raw) + '/ha') +
+                            '  ·  ' + nf(filas[it.dataIndex].ha, 1) + ' ha'
+                    }
+                }
             },
             scales: {
-                x: { ...ejeComun, ticks: { ...ejeComun.ticks, callback: v => Math.round(v / 1000) + 'k' } },
-                y: { ...ejeComun, grid: { display: false }, ticks: { ...ejeComun.ticks, autoSkip: false, font: { family: 'Fira Sans', size: 9 } } }
+                x: (() => {
+                    const r = rangoY(filas.map(v => v[campo][t]));
+                    return { ...base, min: r.min, max: r.max,
+                             ticks: { ...tick, stepSize: r.paso, maxTicksLimit: 6, maxRotation: 0, minRotation: 0,
+                                      callback: v => nf(v / 1000, 0) + 'k' } };
+                })(),
+                y: { ...base, grid: { display: false }, ticks: { ...tick, autoSkip: false, font: { family: 'Fira Sans', size: 10 } } }
             }
-        }
+        },
+        plugins: produccion ? [] : [lineaCero]
     });
-    $('chartNota').textContent = 'US$/ha en ' + MOD.temporadas[t] + '. Mismos cortes y mismos colores que el mapa, ' +
-        'así que una barra y su polígono se leen igual.';
+    $('chartNota').textContent = (produccion ? 'kg/ha' : 'US$/ha') + ' en ' + MOD.temporadas[t] +
+        '. Mismos cortes y colores que el mapa.';
 }
 
 /* ── Selectores y modos ─────────────────────────────────────────────────── */
@@ -1610,6 +1701,9 @@ function cambiarModo(nuevo) {
     $('grpMetrica').hidden = modo !== 'financiero';
     $('grpTerreno').hidden = modo !== 'terreno';
     $('grpSuelo').hidden = modo !== 'suelos';
+    const conPanel = modo === 'produccion' || modo === 'financiero';
+    $('btnPanel').hidden = !conPanel;
+    if (!conPanel && document.body.classList.contains('panel-abierto')) togglePanel(false);
     // El terreno no cambia con la temporada: el selector sobraría y sugeriría
     // que la pendiente se mueve entre 2025 y 2046.
     $('grpTemporada').hidden = modo === 'general' || modo === 'terreno' || modo === 'suelos';
