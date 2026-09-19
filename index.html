@@ -9,16 +9,22 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    SISTEMA DE DISEÑO SEMBRADOR · Hacienda Chada: Huelquén — mapa interactivo
    Mismo chrome que Ketcal y San Gerardo: los tres predios comparten producto,
-   así que comparten tipografía, radios, sombras, escalas y paleta.
-   Única fuente de color: el bloque :root. Fuera de :root no hay literales de
-   color salvo la paleta de especies, que se declara acá mismo como tokens.
+   así que comparten tipografía, radios, sombras, escalas y paleta de marca.
+   Única fuente de color: este bloque :root. Fuera de :root no hay literales.
+
+   El chrome usa la paleta de marca Sembrador; los DATOS usan escalas propias,
+   validadas con el validador de paletas (seis chequeos, simulación CVD
+   Machado-Oliveira-Fernandes). Marca y dato no comparten tokens: si el dato
+   tomara prestado el navy de la marca, el lector confundiría identidad con
+   valor.
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-    /* ---- Paleta oficial Sembrador (theme corporativo) ---- */
+    /* ---- Paleta oficial Sembrador (chrome) ---- */
     --sem-navy:        #2B4973;
     --sem-celeste:     #9CC1D9;
     --sem-slate:       #6D7C86;
@@ -26,22 +32,18 @@
     --sem-green:       #335A34;
     --sem-beige:       #D2CEC5;
 
-    /* ---- Derivados (tintes y sombras de los oficiales) ---- */
     --sem-navy-dark:     #1F3557;
     --sem-navy-light:    #3D5D8A;
     --sem-navy-wash:     #EDF1F6;
-    --sem-green-light:   #4A7A4B;
     --sem-celeste-wash:  #E8F1F7;
     --sem-beige-wash:    #F5F3EF;
     --sem-beige-line:    #E4E1DA;
     --sem-slate-wash:    #F2F4F5;
 
-    /* ---- Texto ---- */
     --sem-ink:           #1A2733;
     --sem-text-2:        var(--sem-slate);
     --sem-text-3:        var(--sem-grey);
 
-    /* ---- Superficies y bordes ---- */
     --sem-surface:       #FFFFFF;
     --sem-line:          var(--sem-beige-line);
     --sem-border-hair:   1px solid #E4E1DA;
@@ -53,10 +55,10 @@
     --z-map:      1;
     --z-legend:   10;
     --z-controls: 20;
+    --z-panel:    30;
     --z-popup:    40;
     --z-tooltip:  60;
 
-    /* ---- Forma ---- */
     --sem-radius:        8px;
     --sem-radius-lg:     12px;
     --sem-radius-pill:   20px;
@@ -64,26 +66,42 @@
     --sem-shadow-md:     0 4px 16px rgba(26,39,51,0.12);
     --sem-shadow-lg:     0 12px 40px rgba(26,39,51,0.22);
     --sem-focus-ring:    0 0 0 3px rgba(43,73,115,0.12);
-    --sem-scrim:         rgba(22,36,58,0.80);
-    --sem-hover-a:       rgba(43,73,115,0.06);
 
-    /* ═══ TOKENS DE DATOS · paleta de especies ═══
-       El chrome usa la paleta de marca; las especies necesitan ocho colores
-       que se distingan sobre satelital, así que tienen escala propia. Cada
-       variedad deriva del color de su especie rotando tono y luminosidad
-       (ver derivarPaletaVariedades): así el mapa se lee primero por especie
-       y recién después por variedad. */
-    --esp-uva-mesa:   #8E5BB5;   /* violeta   · h278 */
-    --esp-vinifera:   #8C2F4A;   /* burdeos   · h343, oscuro */
-    --esp-cerezos:    #C0392B;   /* rojo      · h6   */
-    --esp-naranjos:   #E08A2E;   /* naranja   · h32  */
-    --esp-clementina: #E6C229;   /* amarillo  · h50  */
-    --esp-paltos:     #2E7D4F;   /* verde     · h150 */
-    --esp-ciruelos:   #3F82BE;   /* azul      · h209. El único hueco libre del
-                                    círculo: el rosa chocaba con el burdeos de
-                                    vinífera, y la separación entre especies
-                                    manda sobre el parecido con la fruta. */
-    --esp-disponible: #8A929C;   /* gris: sin plantación productiva */
+    /* ═══ TOKENS DE DATOS ═══════════════════════════════════════════════
+       IDENTIDAD (especie). Siete ranuras categóricas en orden fijo, asignadas
+       por superficie descendente y nunca recicladas. Pasan los seis chequeos
+       en la lista de pares ADYACENTES (peor par ΔE 9,1 CVD / 19,6 visión
+       normal). En pares TODOS-CONTRA-TODOS —que es lo que exige un mapa, donde
+       cualquier par de polígonos puede quedar vecino— siete colores no pasan y
+       ninguna reordenación los salva: el tope del método son tres. La reserva
+       es el encoding secundario obligatorio, que este mapa sí trae: etiqueta de
+       cuartel sobre el polígono, ficha al pasar el cursor con especie y
+       variedad escritas, leyenda con nombre junto al color y filtro por rama.
+       Tres ranuras quedan bajo 3:1 contra el blanco: la misma reserva aplica. */
+    --esp-1: #2a78d6;   /* Uva de mesa   · 169,33 ha */
+    --esp-2: #eb6834;   /* Cerezos       ·  58,44 ha */
+    --esp-3: #1baf7a;   /* Uva vinífera  ·  45,16 ha */
+    --esp-4: #eda100;   /* Ciruelos      ·  12,84 ha */
+    --esp-5: #e87ba4;   /* Paltos        ·   2,83 ha */
+    --esp-6: #008300;   /* Naranjos      ·   2,53 ha */
+    --esp-7: #4a3aa7;   /* Clementinas   ·   1,10 ha */
+    /* Estado, no identidad: "Disponible" es suelo sin plantación productiva.
+       Va en gris reservado y nunca se usa como octava ranura de serie. */
+    --dat-estado:  #8a8780;
+    --dat-sindato: #c9c6bf;
+
+    /* MAGNITUD y POLARIDAD. Rampas de un solo tono, L monótona, paso ΔL ≥ 0,06
+       y extremo claro sobre 2:1 contra el blanco: los cuatro pasan --ordinal.
+       El par divergente es azul↔rojo, los polos frío/cálido documentados. */
+    --neg-4: #9e000e; --neg-3: #d03b3b; --neg-2: #f25c57; --neg-1: #ff867e;
+    --pos-1: #86b6ef; --pos-2: #5598e7; --pos-3: #2a78d6; --pos-4: #184f95;
+    --cos-1: #ff8c5f; --cos-2: #f06d39; --cos-3: #d5541b; --cos-4: #ba3a00; --cos-5: #9f1c00;
+    --seq-1: #6cb4ff; --seq-2: #4e9bfc; --seq-3: #3582e1; --seq-4: #196ac7; --seq-5: #0052ad;
+
+    /* Chrome del gráfico (tokens de dato, no de marca) */
+    --viz-grid:   #e1e0d9;
+    --viz-axis:   #c3c2b7;
+    --viz-muted:  #898781;
 }
 
 * { box-sizing:border-box; }
@@ -93,25 +111,25 @@ body {
     color:var(--sem-ink); background:var(--sem-beige-wash);
     -webkit-font-smoothing:antialiased;
 }
-#map { position:absolute; inset:0; z-index:var(--z-map); }
+#map { position:absolute; top:0; bottom:0; left:0; right:0; z-index:var(--z-map); transition:right 0.2s ease; }
+body.panel-abierto #map { right:392px; }
 
-/* Superficie base de todo panel flotante: sombra + hairline, nunca ambos fuertes. */
 .glass {
-    background:var(--sem-surface);
-    border:var(--sem-border-hair);
-    border-radius:var(--sem-radius-lg);
-    box-shadow:var(--sem-shadow-md);
+    background:var(--sem-surface); border:var(--sem-border-hair);
+    border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-md);
 }
 
 /* ── COMPONENTE 1 · Barra de navegación ─────────────────────────────────── */
 .tabs {
     position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:var(--z-controls);
     display:flex; gap:2px; padding:0 6px;
-    background:var(--sem-surface);
-    border:var(--sem-border-hair); border-bottom:2px solid var(--sem-line);
+    background:var(--sem-surface); border:var(--sem-border-hair);
+    border-bottom:2px solid var(--sem-line);
     border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-sm);
     max-width:min(1040px, calc(100vw - 32px)); overflow-x:auto; scrollbar-width:none;
+    transition:left 0.2s ease;
 }
+body.panel-abierto .tabs { left:calc((100% - 392px) / 2); }
 .tabs::-webkit-scrollbar { display:none; }
 .tab-btn {
     padding:9px 12px; border:none; background:transparent; font-family:inherit;
@@ -120,13 +138,11 @@ body {
     border-bottom:2px solid transparent; margin-bottom:-2px; border-radius:0;
     transition:color 0.15s ease, background 0.15s ease;
 }
-.tab-btn:hover:not(:disabled) { color:var(--sem-navy-light); background:var(--sem-beige-wash); }
+.tab-btn:hover { color:var(--sem-navy-light); background:var(--sem-beige-wash); }
 .tab-btn.active { color:var(--sem-navy); font-weight:500; border-bottom:2px solid var(--sem-green); }
-.tab-btn:disabled { color:var(--sem-text-3); cursor:not-allowed; }
 .tab-btn:focus-visible { outline:none; background:var(--sem-navy-wash); box-shadow:var(--sem-focus-ring); }
 .tab-btn .ic { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; flex:0 0 15px; }
 .tab-btn .ic svg { width:15px; height:15px; display:block; }
-.tabs-sep { flex:0 0 1px; align-self:center; width:1px; height:18px; margin:0 6px; background:var(--sem-line); }
 use[href^="#ic-"] { stroke:currentColor; }
 
 /* ── COMPONENTE 2 · Controles ───────────────────────────────────────────── */
@@ -135,8 +151,11 @@ use[href^="#ic-"] { stroke:currentColor; }
     padding:7px 11px; display:flex; gap:8px; align-items:center;
     background:var(--sem-surface); border:var(--sem-border-hair);
     border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-md);
+    transition:left 0.2s ease;
 }
+body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
 .fc-group { display:flex; flex-direction:column; gap:3px; }
+.fc-group[hidden] { display:none; }
 .fc-label {
     font-size:9.5px; line-height:1.2; font-weight:500; letter-spacing:0.04em;
     text-transform:uppercase; color:var(--sem-text-2);
@@ -152,7 +171,7 @@ use[href^="#ic-"] { stroke:currentColor; }
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10' fill='none'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%236D7C86' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 11px center;
 }
-.fc-search { padding:0 10px; min-width:170px; }
+.fc-search { padding:0 10px; min-width:168px; }
 .fc-select:hover, .fc-search:hover { border:var(--sem-border-strong); }
 .fc-select:focus, .fc-search:focus { border:var(--sem-border-accent); box-shadow:var(--sem-focus-ring); }
 .fc-divider { width:1px; align-self:stretch; background:var(--sem-line); margin:0 2px; }
@@ -167,11 +186,9 @@ use[href^="#ic-"] { stroke:currentColor; }
 .fc-btn .ic { display:inline-flex; width:15px; height:15px; }
 .fc-btn .ic svg { width:15px; height:15px; }
 .fc-btn:hover { background:var(--sem-beige-wash); border:var(--sem-border-strong); }
-.fc-btn.abierto { background:var(--sem-navy); border-color:var(--sem-navy); color:var(--sem-surface); }
+.fc-btn.abierta { background:var(--sem-navy); border-color:var(--sem-navy); color:var(--sem-surface); }
 .fc-btn:focus-visible { outline:none; box-shadow:var(--sem-focus-ring); }
 
-/* Popover "Vista": qué capas se dibujan y sobre qué base. Lo que se cambia
-   todo el tiempo queda en la barra; lo que se ajusta una vez, acá adentro. */
 .fc-pop-wrap { position:relative; display:flex; align-self:flex-end; }
 .fc-pop {
     position:absolute; top:calc(100% + 13px); right:0; z-index:var(--z-popup);
@@ -196,7 +213,7 @@ use[href^="#ic-"] { stroke:currentColor; }
 }
 .fc-pop-action:hover { background:var(--sem-beige-wash); border:var(--sem-border-strong); }
 
-/* ── COMPONENTE 3 · Interruptor de capa ─────────────────────────────────── */
+/* ── COMPONENTE 3 · Interruptor ─────────────────────────────────────────── */
 .sw { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11.5px; color:var(--sem-ink); }
 .sw input { position:absolute; opacity:0; width:0; height:0; }
 .sw-track {
@@ -216,13 +233,24 @@ use[href^="#ic-"] { stroke:currentColor; }
 .stats-bar {
     position:absolute; top:12px; right:16px; z-index:var(--z-legend);
     padding:8px 12px; display:flex; gap:13px; align-items:stretch;
+    transition:right 0.2s ease;
 }
+body.panel-abierto .stats-bar { right:408px; }
+/* En los modos de dato la barra lleva cinco métricas y, anclada arriba a la
+   derecha, se metía bajo la barra de pestañas. Baja al pie, donde hay ancho
+   libre, y le cede el sitio al sello de datos —que en esos modos ya está
+   escrito en la cabecera del panel—. */
+body.modo-dato .stats-bar { top:auto; bottom:20px; }
+body.modo-dato .data-stamp { display:none; }
+/* El panel de leyenda le cede el pie a la barra: apilados, no encimados. */
+body.modo-dato .legend-panel { bottom:68px; }
 .stat { display:flex; flex-direction:column; gap:1px; min-width:52px; }
 .stat + .stat { padding-left:13px; border-left:var(--sem-border-soft); }
 .stat-val { font-size:15px; font-weight:600; line-height:1.15; color:var(--sem-navy); font-variant-numeric:tabular-nums; }
+.stat-val.neg { color:var(--neg-3); }
 .stat-lbl { font-size:9.5px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; color:var(--sem-text-2); }
 
-/* ── COMPONENTE 5 · Leyenda / árbol de especies y variedades ────────────── */
+/* ── COMPONENTE 5 · Leyenda ─────────────────────────────────────────────── */
 .legend-panel {
     position:absolute; top:60px; left:16px; bottom:20px; width:272px; z-index:var(--z-legend);
     display:flex; flex-direction:column;
@@ -247,18 +275,11 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .legend-body { overflow-y:auto; padding:6px 6px 10px; flex:1; scrollbar-width:thin; }
 
 .lg-esp { margin-bottom:2px; }
-.lg-row {
-    display:flex; align-items:center; gap:7px; padding:5px 6px;
-    border-radius:var(--sem-radius); cursor:pointer; user-select:none;
-}
+.lg-row { display:flex; align-items:center; gap:7px; padding:5px 6px; border-radius:var(--sem-radius); cursor:pointer; user-select:none; }
 .lg-row:hover { background:var(--sem-beige-wash); }
 .lg-row.off .lg-name, .lg-row.off .lg-meta { color:var(--sem-text-3); }
 .lg-row.off .lg-dot { opacity:0.25; }
-.lg-caret {
-    flex:0 0 12px; width:12px; height:12px; color:var(--sem-text-3);
-    display:inline-flex; align-items:center; justify-content:center;
-    transition:transform 0.15s;
-}
+.lg-caret { flex:0 0 12px; width:12px; height:12px; color:var(--sem-text-3); display:inline-flex; align-items:center; justify-content:center; transition:transform 0.15s; }
 .lg-esp.abierta .lg-caret { transform:rotate(90deg); }
 .lg-dot { flex:0 0 11px; width:11px; height:11px; border-radius:3px; border:1px solid rgba(26,39,51,0.18); }
 .lg-name { flex:1; font-size:11.5px; font-weight:500; color:var(--sem-ink); line-height:1.25; }
@@ -269,9 +290,20 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .lg-vars .lg-name { font-size:11px; font-weight:400; }
 .lg-vars .lg-dot { flex:0 0 9px; width:9px; height:9px; border-radius:2px; }
 
-/* ── COMPONENTE 6 · Ficha del cuartel (hover y fijada) ──────────────────── */
+/* Leyenda de la escala continua: pie del panel, sólo en los modos de dato. */
+.escala { border-top:var(--sem-border-hair); padding:9px 12px 10px; }
+.escala[hidden] { display:none; }
+.escala-tit { font-size:10px; font-weight:600; color:var(--sem-ink); }
+.escala-sub { font-size:9.5px; color:var(--sem-text-2); margin-bottom:6px; }
+.escala-barra { display:flex; height:11px; border-radius:3px; overflow:hidden; border:1px solid rgba(26,39,51,0.12); }
+.escala-barra i { flex:1; }
+.escala-ticks { display:flex; justify-content:space-between; margin-top:3px; font-size:9px; color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
+.escala-nd { display:flex; align-items:center; gap:6px; margin-top:7px; font-size:9.5px; color:var(--sem-text-2); }
+.escala-nd i { width:10px; height:10px; border-radius:2px; border:1px solid rgba(26,39,51,0.18); }
+
+/* ── COMPONENTE 6 · Ficha del cuartel ───────────────────────────────────── */
 .card {
-    position:absolute; z-index:var(--z-tooltip); width:252px; padding:0;
+    position:absolute; z-index:var(--z-tooltip); width:268px;
     background:var(--sem-surface); border:var(--sem-border-hair);
     border-radius:var(--sem-radius); box-shadow:var(--sem-shadow-lg);
     pointer-events:none; opacity:0; transition:opacity 0.12s;
@@ -295,31 +327,87 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 }
 .card.fija .card-close { display:flex; }
 .card-close:hover { background:var(--sem-beige-wash); color:var(--sem-ink); }
-.card-body { padding:8px 11px 10px; display:flex; flex-direction:column; gap:6px; }
+.card-body { padding:8px 11px 10px; display:flex; flex-direction:column; gap:5px; max-height:62vh; overflow-y:auto; scrollbar-width:thin; }
 .card-kv { display:flex; justify-content:space-between; gap:10px; font-size:11px; align-items:baseline; }
 .card-k { color:var(--sem-text-2); }
 .card-v { color:var(--sem-ink); font-weight:500; text-align:right; font-variant-numeric:tabular-nums; }
-.card-mix { border-top:var(--sem-border-soft); padding-top:7px; display:flex; flex-direction:column; gap:3px; }
-.card-mix-title {
-    font-size:9px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;
-    color:var(--sem-text-3); margin-bottom:1px;
-}
-.card-chip {
-    display:flex; justify-content:space-between; gap:8px; font-size:10.5px;
-    padding:2px 6px; background:var(--sem-slate-wash); border-radius:var(--sem-radius);
-}
+.card-v.neg { color:var(--neg-3); }
+.card-v.pos { color:var(--pos-4); }
+.card-sec { border-top:var(--sem-border-soft); padding-top:7px; margin-top:2px; display:flex; flex-direction:column; gap:4px; }
+.card-sec-tit { font-size:9px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:var(--sem-text-3); }
+.card-chip { display:flex; justify-content:space-between; gap:8px; font-size:10.5px; padding:2px 6px; background:var(--sem-slate-wash); border-radius:var(--sem-radius); }
 .card-chip span:first-child { color:var(--sem-ink); }
 .card-chip span:last-child { color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
-.card-nota {
-    font-size:10.5px; color:var(--sem-navy); background:var(--sem-navy-wash);
-    padding:3px 7px; border-radius:var(--sem-radius); align-self:flex-start;
-}
-.card-hint {
-    border-top:var(--sem-border-soft); padding-top:6px; margin-top:1px;
-    font-size:9.5px; color:var(--sem-text-3);
-}
+.card-nota { font-size:10.5px; color:var(--sem-navy); background:var(--sem-navy-wash); padding:3px 7px; border-radius:var(--sem-radius); align-self:flex-start; }
+.card-alerta { font-size:10px; color:var(--neg-4); background:#fdeceb; padding:4px 7px; border-radius:var(--sem-radius); line-height:1.35; }
+.card-hint { border-top:var(--sem-border-soft); padding-top:6px; margin-top:1px; font-size:9.5px; color:var(--sem-text-3); }
 
-/* ── Chrome de Mapbox alineado al sistema ───────────────────────────────── */
+/* ── COMPONENTE 7 · Panel del modelo ────────────────────────────────────── */
+.modelo-panel {
+    position:absolute; top:0; right:0; bottom:0; width:392px; z-index:var(--z-panel);
+    background:var(--sem-surface); border-left:var(--sem-border-hair);
+    display:none; flex-direction:column;
+}
+body.panel-abierto .modelo-panel { display:flex; }
+.mp-head { padding:12px 14px 10px; border-bottom:var(--sem-border-hair); display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.mp-title { font-size:13px; font-weight:600; color:var(--sem-ink); }
+.mp-sub { font-size:10px; color:var(--sem-text-2); margin-top:2px; }
+.mp-body { flex:1; overflow-y:auto; scrollbar-width:thin; }
+.mp-sect { border-bottom:var(--sem-border-hair); }
+.mp-sect-head {
+    width:100%; padding:9px 14px; background:transparent; border:none; cursor:pointer;
+    font-family:inherit; font-size:10px; font-weight:600; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--sem-text-2);
+    display:flex; align-items:center; gap:7px; text-align:left;
+}
+.mp-sect-head:hover { background:var(--sem-beige-wash); color:var(--sem-ink); }
+.mp-sect-head .lg-caret { transition:transform 0.15s; }
+.mp-sect.abierta .mp-sect-head .lg-caret { transform:rotate(90deg); }
+.mp-sect-body { display:none; padding:2px 14px 14px; }
+.mp-sect.abierta .mp-sect-body { display:block; }
+
+.mp-kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px 14px; }
+.mp-kpi { padding:8px 10px; background:var(--sem-beige-wash); border-radius:var(--sem-radius); }
+.mp-kpi-val { font-size:17px; font-weight:600; line-height:1.15; color:var(--sem-navy); font-variant-numeric:tabular-nums; }
+.mp-kpi-val.neg { color:var(--neg-3); }
+.mp-kpi-lbl { font-size:9.5px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; color:var(--sem-text-2); margin-top:2px; }
+
+.mp-chart-tabs { display:flex; gap:2px; margin-bottom:10px; }
+.mp-chart-tab {
+    padding:4px 9px; border:var(--sem-border-hair); background:transparent;
+    font-family:inherit; font-size:10.5px; color:var(--sem-text-2);
+    border-radius:var(--sem-radius); cursor:pointer;
+}
+.mp-chart-tab.active { background:var(--sem-navy); border-color:var(--sem-navy); color:var(--sem-surface); }
+.mp-chart-wrap { position:relative; height:250px; }
+.mp-chart-nota { font-size:9.5px; color:var(--sem-text-3); margin-top:7px; line-height:1.4; }
+
+.mp-tabla { width:100%; border-collapse:collapse; font-size:10.5px; font-variant-numeric:tabular-nums; }
+.mp-tabla th {
+    text-align:right; padding:5px 4px; font-size:9px; font-weight:600;
+    letter-spacing:0.03em; text-transform:uppercase; color:var(--sem-text-2);
+    border-bottom:var(--sem-border-hair); cursor:pointer; white-space:nowrap;
+}
+.mp-tabla th:first-child { text-align:left; }
+.mp-tabla th:hover { color:var(--sem-ink); }
+.mp-tabla th.orden::after { content:' ▾'; color:var(--sem-navy); }
+.mp-tabla th.orden.asc::after { content:' ▴'; }
+.mp-tabla td { padding:4px; text-align:right; border-bottom:var(--sem-border-soft); color:var(--sem-ink); }
+.mp-tabla td:first-child { text-align:left; display:flex; align-items:center; gap:6px; }
+.mp-tabla td.neg { color:var(--neg-3); }
+.mp-tabla tbody tr { cursor:pointer; }
+.mp-tabla tbody tr:hover td { background:var(--sem-beige-wash); }
+.mp-tabla .lg-dot { flex:0 0 8px; width:8px; height:8px; }
+
+.mp-conc { width:100%; border-collapse:collapse; font-size:10.5px; font-variant-numeric:tabular-nums; }
+.mp-conc td { padding:4px 2px; border-bottom:var(--sem-border-soft); vertical-align:top; }
+.mp-conc td:last-child { text-align:right; white-space:nowrap; font-weight:500; }
+.mp-conc tr.total td { font-weight:600; color:var(--sem-navy); border-bottom:none; }
+.mp-conc tr.resta td { color:var(--sem-text-2); }
+.mp-conc-nota { font-size:9.5px; color:var(--sem-text-3); margin-top:6px; line-height:1.45; }
+.mp-aviso { font-size:10px; line-height:1.45; color:var(--sem-ink); background:var(--sem-beige-wash); border-left:2px solid var(--neg-3); padding:7px 9px; border-radius:0 var(--sem-radius) var(--sem-radius) 0; margin-top:9px; }
+
+/* ── Chrome de Mapbox ───────────────────────────────────────────────────── */
 .mapboxgl-ctrl-group { border:var(--sem-border-hair); box-shadow:var(--sem-shadow-sm); border-radius:var(--sem-radius); }
 .mapboxgl-ctrl-group button { background-color:var(--sem-surface); }
 .mapboxgl-ctrl-bottom-left { left:296px; }
@@ -331,6 +419,7 @@ body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
     background:var(--sem-surface); border:var(--sem-border-hair);
     border-radius:var(--sem-radius); box-shadow:var(--sem-shadow-sm);
 }
+body.panel-abierto .data-stamp { right:408px; }
 
 .loader {
     position:absolute; inset:0; z-index:var(--z-tooltip);
@@ -339,15 +428,18 @@ body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
 }
 .loader[hidden] { display:none; }
 
-/* ── Adaptación a pantallas angostas ────────────────────────────────────── */
+@media (max-width:1180px) {
+    body.panel-abierto #map { right:0; }
+    .modelo-panel { box-shadow:var(--sem-shadow-lg); }
+    body.panel-abierto .tabs, body.panel-abierto .controls { left:50%; }
+    body.panel-abierto .stats-bar, body.panel-abierto .data-stamp { right:408px; }
+}
 @media (max-width:900px) {
     .tabs { left:8px; right:8px; transform:none; max-width:none; border-radius:var(--sem-radius); }
-    .controls {
-        top:56px; left:8px; right:8px; transform:none;
-        flex-wrap:wrap; border-radius:var(--sem-radius);
-    }
+    .controls { top:56px; left:8px; right:8px; transform:none; flex-wrap:wrap; border-radius:var(--sem-radius); }
     .stats-bar { top:auto; bottom:20px; right:8px; left:8px; overflow-x:auto; scrollbar-width:none; }
     .legend-panel { top:auto; bottom:78px; left:8px; width:min(272px, calc(100vw - 16px)); max-height:46vh; }
+    .modelo-panel { width:100vw; }
     .mapboxgl-ctrl-bottom-left { left:0; }
     .data-stamp { display:none; }
 }
@@ -356,9 +448,8 @@ body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
 <body>
 
 <div id="map"></div>
-<div class="loader" id="loader">Cargando cuarteles…</div>
+<div class="loader" id="loader">Cargando cuarteles y modelo…</div>
 
-<!-- Set único de íconos de línea, SVG inline, trazo 1.5px, currentColor. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
     <g id="ic-mapa" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
         <path d="M9 2.5 5.5 4 2 2.5v11L5.5 12 9 13.5 12.5 12 16 13.5v-11L12.5 4 9 2.5Z"/><path d="M6 4v8M12 6v8"/></g>
@@ -374,25 +465,31 @@ body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
         <path d="M4.5 4.5l9 9M13.5 4.5l-9 9"/></g>
     <g id="ic-caret" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6">
         <path d="M6.5 3.5 12 9l-5.5 5.5"/></g>
+    <g id="ic-informe" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M4.5 2.5h9v13h-9v-13Z"/><path d="M7 5.5h4M7 8.5h4M7 11.5h2.5"/></g>
 </defs></svg>
 
-<div class="tabs">
-    <button class="tab-btn active" data-mode="general"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-mapa"/></svg></span><span>Vista general</span></button>
-    <span class="tabs-sep" aria-hidden="true"></span>
-    <!-- Pendientes. Se muestran deshabilitadas a propósito: la hoja de ruta es
-         parte de la información, y una pestaña que aparece de la nada más
-         adelante desorienta más que una que se anuncia. -->
-    <button class="tab-btn" disabled title="Producciones por cuartel · pendiente de cruce"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-barras"/></svg></span><span>Producción</span></button>
-    <button class="tab-btn" disabled title="Ingresos, costos y EBITDA del modelo financiero · pendiente"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-billete"/></svg></span><span>Financiero</span></button>
+<div class="tabs" id="tabs">
+    <button class="tab-btn active" data-modo="general"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-mapa"/></svg></span><span>Vista general</span></button>
+    <button class="tab-btn" data-modo="produccion" title="Rendimiento por hectárea según el modelo"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-barras"/></svg></span><span>Producción</span></button>
+    <button class="tab-btn" data-modo="financiero" title="EBITDA, ingresos y costos por hectárea"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-billete"/></svg></span><span>Financiero</span></button>
 </div>
 
 <div class="controls">
-    <div class="fc-group">
+    <div class="fc-group" id="grpColor">
         <label class="fc-label" for="selColor">Colorear por</label>
         <select class="fc-select" id="selColor">
             <option value="especie">Especie</option>
             <option value="variedad" selected>Variedad</option>
         </select>
+    </div>
+    <div class="fc-group" id="grpMetrica" hidden>
+        <label class="fc-label" for="selMetrica">Métrica</label>
+        <select class="fc-select" id="selMetrica"></select>
+    </div>
+    <div class="fc-group" id="grpTemporada" hidden>
+        <label class="fc-label" for="selTemporada">Temporada</label>
+        <select class="fc-select" id="selTemporada"></select>
     </div>
     <div class="fc-group">
         <label class="fc-label" for="inpBuscar">Buscar cuartel</label>
@@ -400,6 +497,9 @@ body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
         <datalist id="dlCuarteles"></datalist>
     </div>
     <div class="fc-divider" aria-hidden="true"></div>
+    <button type="button" class="fc-btn" id="btnPanel" title="Resumen del modelo financiero">
+        <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-informe"/></svg></span><span>Modelo</span>
+    </button>
     <div class="fc-pop-wrap">
         <button type="button" class="fc-btn" id="btnVista" aria-haspopup="true" aria-expanded="false" aria-controls="popVista" title="Capas y encuadre">
             <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-capas"/></svg></span><span>Vista</span>
@@ -441,6 +541,41 @@ body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
         </div>
     </div>
     <div class="legend-body" id="legendBody"></div>
+    <div class="escala" id="escala" hidden></div>
+</div>
+
+<div class="modelo-panel" id="modeloPanel">
+    <div class="mp-head">
+        <div>
+            <div class="mp-title">Modelo financiero</div>
+            <div class="mp-sub" id="mpSub"></div>
+        </div>
+        <button type="button" class="card-close" style="display:flex; position:static" id="mpCerrar" aria-label="Cerrar panel">
+            <svg viewBox="0 0 18 18" width="13" height="13"><use href="#ic-cerrar"/></svg>
+        </button>
+    </div>
+    <div class="mp-body">
+        <div class="mp-kpis" id="mpKpis"></div>
+        <div class="mp-sect abierta" id="sectGrafico">
+            <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Gráfico</button>
+            <div class="mp-sect-body">
+                <div class="mp-chart-tabs">
+                    <button type="button" class="mp-chart-tab active" data-vista="serie">Serie 2025-2046</button>
+                    <button type="button" class="mp-chart-tab" data-vista="ranking">EBITDA/ha por variedad</button>
+                </div>
+                <div class="mp-chart-wrap"><canvas id="chart"></canvas></div>
+                <div class="mp-chart-nota" id="chartNota"></div>
+            </div>
+        </div>
+        <div class="mp-sect abierta" id="sectTabla">
+            <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Tabla por variedad</button>
+            <div class="mp-sect-body"><table class="mp-tabla" id="tabla"></table></div>
+        </div>
+        <div class="mp-sect" id="sectConc">
+            <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Conciliación de superficie</button>
+            <div class="mp-sect-body"><table class="mp-conc" id="conc"></table><div class="mp-conc-nota" id="concNota"></div><div id="avisos"></div></div>
+        </div>
+    </div>
 </div>
 
 <div class="card" id="card" role="dialog" aria-live="polite"></div>
@@ -449,8 +584,16 @@ body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    Hacienda Chada: Huelquén — mapa interactivo
-   Fuente única de datos: geo_data.json, derivado del KMZ por
-   tools/kml_to_geojson.py. Este archivo no contiene datos del predio.
+
+   Dos fuentes, una sola verdad por dimensión:
+     geo_data.json     geometría e identidad de cuartel (derivado del KMZ)
+     modelo_data.json  superficie, producción, ingresos, costos y EBITDA
+                       (derivado del modelo financiero)
+
+   La superficie SIEMPRE es la del modelo: 292,23 ha productivas. El KMZ no
+   aporta hectáreas y este archivo no las calcula: un polígono dibujado a mano
+   no es una medición, y mezclar las dos haría que los totales del mapa y los
+   del modelo no cuadren.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 mapboxgl.accessToken = 'pk.eyJ1Ijoicm9sYW5kb3BpbmEiLCJhIjoiY21ydTF0OWVlMDMwNjM2cHgwdTd4NGVzZSJ9.zvp3ej-YuJ1lEZ3HKtlSAw';
@@ -458,157 +601,268 @@ mapboxgl.accessToken = 'pk.eyJ1Ijoicm9sYW5kb3BpbmEiLCJhIjoiY21ydTF0OWVlMDMwNjM2c
 const ESTILO_SAT   = 'mapbox://styles/mapbox/satellite-v9';
 const ESTILO_CLARO = 'mapbox://styles/mapbox/light-v11';
 
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const nf = (x, d = 1) => x == null ? '—' : x.toLocaleString('es-CL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = x => x == null ? '—' : (x < 0 ? '−' : '') + 'US$ ' + Math.abs(Math.round(x)).toLocaleString('es-CL');
+const pct = x => x == null ? '—' : (x * 100).toFixed(1).replace('.', ',') + '%';
+const miles = x => x == null ? '—' : Math.round(x).toLocaleString('es-CL');
+
 /* La clave de una variedad incluye su especie: "Cabernet Sauvignon" existe en
-   Uva vinífera y en Disponible, y "Mixtos" en Cerezos y en Ciruelos. Sin el
-   prefijo, apagar una apagaría la otra. */
+   Uva vinífera y en Disponible, y "Mixtos" en Cerezos y en Ciruelos. */
 const vkey = (esp, vari) => esp + '|' + vari;
 
-/* Color base de cada especie, leído de los tokens del sistema de diseño para
-   que la paleta siga viviendo en :root y no duplicada en JS. */
-const TOKEN_ESPECIE = {
-    'Uva de mesa':  '--esp-uva-mesa',
-    'Cerezos':      '--esp-cerezos',
-    'Uva vinífera': '--esp-vinifera',
-    'Ciruelos':     '--esp-ciruelos',
-    'Paltos':       '--esp-paltos',
-    'Naranjos':     '--esp-naranjos',
-    'Clementinas':  '--esp-clementina',
-    'Disponible':   '--esp-disponible'
+/* ── Color ──────────────────────────────────────────────────────────────────
+   Las siete ranuras de especie se declaran en :root y se leen de ahí. Las
+   variedades NO reciben tonos nuevos: toman el tono de su especie y se
+   escalonan en luminosidad (rampa ordinal). Así el mapa se lee primero por
+   especie —el tono— y después por variedad —la profundidad—, y una variedad
+   nunca se disfraza de otra especie. Con más de cinco variedades en una misma
+   especie los pasos quedan por debajo del ΔL de 0,06 que pide una rampa
+   ordinal: ahí el color deja de bastar y cargan la etiqueta del cuartel, la
+   ficha y la leyenda, que es el encoding secundario que el mapa ya trae. */
+const SLOTS = [
+    { L: 0.575, C: 0.163, H: 255.5 },   /* --esp-1 azul    */
+    { L: 0.671, C: 0.175, H: 40.6  },   /* --esp-2 naranja */
+    { L: 0.669, C: 0.141, H: 162.1 },   /* --esp-3 aqua    */
+    { L: 0.764, C: 0.161, H: 75.1  },   /* --esp-4 amarillo*/
+    { L: 0.716, C: 0.141, H: 357.4 },   /* --esp-5 magenta */
+    { L: 0.529, C: 0.180, H: 142.5 },   /* --esp-6 verde   */
+    { L: 0.433, C: 0.167, H: 283.6 }    /* --esp-7 violeta */
+];
+const L_CLARA = 0.76, L_OSCURA = 0.44;   /* extremos de la rampa ordinal */
+
+function oklchHex(L, C, H) {
+    const h = H * Math.PI / 180, a = C * Math.cos(h), b = C * Math.sin(h);
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+    const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+    const l = l_ ** 3, m = m_ ** 3, s = s_ ** 3;
+    const rgb = [
+        4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+    ];
+    const enc = v => {
+        v = Math.max(0, Math.min(1, v));
+        v = v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+        return Math.round(Math.max(0, Math.min(1, v)) * 255);
+    };
+    return '#' + rgb.map(v => enc(v).toString(16).padStart(2, '0')).join('');
+}
+
+/* Baja el chroma hasta que el color entra en el gamut sRGB: al alejarse de la
+   luminosidad base, el tono ya no admite la saturación original. */
+function enGamut(L, C, H) {
+    for (let f = 1; f >= 0.3; f -= 0.05) {
+        const hex = oklchHex(L, C * f, H);
+        if (!/^#(00|ff)(00|ff)(00|ff)$/.test(hex)) return hex;
+    }
+    return oklchHex(L, C * 0.3, H);
+}
+
+/* ── Escalas de dato ────────────────────────────────────────────────────────
+   Cada escala son n cortes y n+1 colores. Los cortes son fijos y no se
+   recalculan por temporada: si la escala se moviera con los datos, dos
+   temporadas del mismo mapa no serían comparables, que es justo lo que uno
+   quiere mirar. */
+const ESCALAS = {
+    ebitda_ha: {
+        etiqueta: 'EBITDA / ha', titulo: 'EBITDA por hectárea', unidad: 'US$/ha', tipo: 'divergente',
+        cortes: [-7500, -5000, -2500, 0, 2500, 5000, 7500],
+        tokens: ['--neg-4', '--neg-3', '--neg-2', '--neg-1', '--pos-1', '--pos-2', '--pos-3', '--pos-4'],
+        fmt: usd
+    },
+    ingreso_ha: {
+        etiqueta: 'Ingresos / ha', titulo: 'Ingresos por hectárea', unidad: 'US$/ha', tipo: 'secuencial',
+        cortes: [5000, 15000, 22000, 30000],
+        tokens: ['--seq-1', '--seq-2', '--seq-3', '--seq-4', '--seq-5'],
+        fmt: usd
+    },
+    costo_ha: {
+        etiqueta: 'Costos / ha', titulo: 'Costos por hectárea', unidad: 'US$/ha', tipo: 'secuencial',
+        cortes: [8000, 15000, 20000, 26000],
+        tokens: ['--cos-1', '--cos-2', '--cos-3', '--cos-4', '--cos-5'],
+        fmt: usd
+    },
+    margen: {
+        etiqueta: 'Margen EBITDA', titulo: 'Margen EBITDA sobre ventas', unidad: '% de ventas', tipo: 'divergente',
+        cortes: [-1, -0.25, 0, 0.10, 0.25],
+        tokens: ['--neg-3', '--neg-2', '--neg-1', '--pos-1', '--pos-3', '--pos-4'],
+        fmt: pct
+    },
+    rend_kg_ha: {
+        etiqueta: 'Rendimiento', titulo: 'Rendimiento por hectárea', unidad: 'kg/ha', tipo: 'secuencial',
+        cortes: [3000, 8000, 15000, 25000],
+        tokens: ['--seq-1', '--seq-2', '--seq-3', '--seq-4', '--seq-5'],
+        fmt: x => miles(x) + ' kg'
+    }
 };
-
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-
-/* ── Color ──────────────────────────────────────────────────────────────── */
-function hexAHsl(hex) {
-    const n = parseInt(hex.slice(1), 16);
-    let r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
-    if (max === min) return [0, 0, l];
-    const d = max - min;
-    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    let h;
-    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    return [h * 60, s, l];
-}
-/* Sintaxis con comas a propósito: el parser de estilos de Mapbox GL no acepta
-   la forma moderna separada por espacios. */
-const hsl = (h, s, l) => 'hsl(' + Math.round(((h % 360) + 360) % 360) + ',' +
-    Math.round(Math.min(1, Math.max(0, s)) * 100) + '%,' +
-    Math.round(Math.min(0.92, Math.max(0.16, l)) * 100) + '%)';
-
-/* Cada variedad deriva del color de su especie: el tono se abre en abanico y la
-   luminosidad alterna entre un paso claro y uno oscuro. Así una variedad no se
-   confunde con la vecina, pero el bloque entero sigue leyéndose como "esta
-   especie". El abanico se estrecha cuando hay pocas variedades: abrirlo 46° para
-   repartir tres colores los empujaría al territorio de la especie vecina, y en
-   el mapa la distancia entre especies importa más que entre variedades. */
-function derivarPaletaVariedades(especie, variedades) {
-    const [h, s, l] = hexAHsl(css(TOKEN_ESPECIE[especie]) || '#8A929C');
-    const n = variedades.length;
-    const abanico = n <= 2 ? 0 : (n <= 4 ? 26 : 46);
-    const out = {};
-    variedades.forEach((v, i) => {
-        if (n === 1) { out[v] = hsl(h, s, l); return; }
-        const t = i / (n - 1);                                  // 0 → 1
-        const dh = (t - 0.5) * abanico;
-        const dl = (i % 2 === 0 ? 1 : -1) * (0.05 + 0.10 * Math.abs(t - 0.5) * 2);
-        out[v] = hsl(h + dh, s * (0.82 + 0.3 * t), l + dl);
-    });
-    return out;
-}
+const METRICAS_FIN = ['ebitda_ha', 'ingreso_ha', 'costo_ha', 'margen'];
 
 /* ── Estado ─────────────────────────────────────────────────────────────── */
-let DATA = null;
-let COLOR_ESPECIE = {};       // especie -> color
-let COLOR_VARIEDAD = {};      // vkey    -> color
-const visibles = new Set();   // vkeys encendidos
-let modoColor = 'variedad';
-let fijado = null;            // id del cuartel con ficha fija
-let hoverId = null;
-let estiloSatelital = true;
+let GEO = null, MOD = null;
+let MIDX = {};                 // clave del modelo -> registro de variedad
+let VKEY_DE_MODELO = {};       // clave del modelo -> rama del KMZ que la contiene
+let COLOR_ESPECIE = {};        // especie del KMZ -> hex
+let COLOR_VARIEDAD = {};       // vkey del KMZ    -> hex
+let HA_ESPECIE = {}, HA_VKEY = {};   // hectáreas del modelo, agregadas al KMZ
+const visibles = new Set();
+let modo = 'general', modoColor = 'variedad', metrica = 'ebitda_ha', t = 3;
+let vistaGrafico = 'serie', ordenTabla = { campo: 'ebitda_ha', asc: false };
+let fijado = null, hoverId = null, estiloSatelital = true, grafico = null;
 
-const $ = id => document.getElementById(id);
-const nf = (x, d = 1) => x.toLocaleString('es-CL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const escalaActiva = () => modo === 'produccion' ? ESCALAS.rend_kg_ha : ESCALAS[metrica];
 
 /* ── Mapa ───────────────────────────────────────────────────────────────── */
 const map = new mapboxgl.Map({
-    container: 'map',
-    style: ESTILO_SAT,
-    center: [-70.643096, -33.885441],
-    zoom: 13.4,
-    attributionControl: false
+    container: 'map', style: ESTILO_SAT,
+    center: [-70.643096, -33.885441], zoom: 13.4, attributionControl: false
 });
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-left');
 map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
 map.addControl(new mapboxgl.ScaleControl({ maxWidth: 90, unit: 'metric' }), 'bottom-left');
 
-fetch('geo_data.json')
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(d => {
-        DATA = d;
-        prepararPaletas();
-        construirLeyenda();
-        construirDatalist();
-        $('dataStamp').textContent = 'KMZ ' + (d.generated_at || '').slice(0, 10) + ' · ' + d.source;
-        if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
-    })
-    .catch(e => { $('loader').textContent = 'No se pudo cargar geo_data.json (' + e.message + ')'; });
+Promise.all([
+    fetch('geo_data.json').then(r => { if (!r.ok) throw new Error('geo_data.json ' + r.status); return r.json(); }),
+    fetch('modelo_data.json').then(r => { if (!r.ok) throw new Error('modelo_data.json ' + r.status); return r.json(); })
+]).then(([geo, mod]) => {
+    GEO = geo; MOD = mod;
+    MOD.variedades.forEach(v => { MIDX[vkey(v.especie, v.variedad)] = v; });
+    t = Math.min(3, MOD.temporadas.length - 1);
+    prepararPaletas();
+    construirSelectores();
+    construirLeyenda();
+    construirDatalist();
+    $('dataStamp').textContent = 'KMZ ' + (GEO.generated_at || '').slice(0, 10) +
+        ' · Modelo ' + (MOD.generated_at || '').slice(0, 10);
+    $('mpSub').textContent = MOD.source;
+    if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
+}).catch(e => { $('loader').textContent = 'No se pudieron cargar los datos: ' + e.message; });
 
+/* Las hectáreas del modelo se agregan al nivel del KMZ. Una variedad del
+   modelo puede tocar varios cuarteles y un cuartel mixto varias variedades:
+   se cuenta cada variedad una sola vez por rama, nunca por polígono. */
 function prepararPaletas() {
-    DATA.por_especie.forEach(esp => {
-        COLOR_ESPECIE[esp.especie] = css(TOKEN_ESPECIE[esp.especie]) || css('--esp-disponible');
-        const paleta = derivarPaletaVariedades(esp.especie, esp.variedades.map(v => v.variedad));
-        esp.variedades.forEach(v => {
-            const k = vkey(esp.especie, v.variedad);
-            COLOR_VARIEDAD[k] = paleta[v.variedad];
-            visibles.add(k);
+    const porEspecie = {};
+    GEO.cuarteles.features.forEach(f => {
+        const p = f.properties;
+        const e = porEspecie[p.especie] || (porEspecie[p.especie] = { variedades: {}, claves: new Set() });
+        const k = vkey(p.especie, p.variedad);
+        const v = e.variedades[k] || (e.variedades[k] = { variedad: p.variedad, claves: new Set() });
+        (p.modelo || []).forEach(m => {
+            v.claves.add(m); e.claves.add(m);
+            // Una variedad del modelo cuelga siempre de la misma rama del KMZ:
+            // el primer cuartel que la nombra fija de qué color se pinta en la
+            // tabla, para que tabla y mapa no muestren dos colores distintos.
+            if (!VKEY_DE_MODELO[m]) VKEY_DE_MODELO[m] = k;
         });
+    });
+
+    const haDe = claves => [...claves].reduce((a, k) => a + ((MIDX[k] || {}).ha || 0), 0);
+    Object.entries(porEspecie).forEach(([esp, e]) => {
+        HA_ESPECIE[esp] = haDe(e.claves);
+        Object.entries(e.variedades).forEach(([k, v]) => { HA_VKEY[k] = haDe(v.claves); visibles.add(k); });
+    });
+
+    // Las ranuras se asignan en orden fijo por superficie descendente y no se
+    // reciclan. "Disponible" no compite por ranura: es estado, no identidad.
+    const orden = Object.keys(porEspecie)
+        .filter(e => HA_ESPECIE[e] > 0)
+        .sort((a, b) => HA_ESPECIE[b] - HA_ESPECIE[a]);
+    orden.forEach((esp, i) => {
+        COLOR_ESPECIE[esp] = css('--esp-' + Math.min(i + 1, SLOTS.length));
+        const slot = SLOTS[Math.min(i, SLOTS.length - 1)];
+        const vars = Object.entries(porEspecie[esp].variedades)
+            .sort((a, b) => HA_VKEY[b[0]] - HA_VKEY[a[0]]);
+        vars.forEach(([k], j) => {
+            const L = vars.length === 1 ? slot.L
+                : L_CLARA - (L_CLARA - L_OSCURA) * (j / (vars.length - 1));
+            COLOR_VARIEDAD[k] = enGamut(L, slot.C, slot.H);
+        });
+    });
+    Object.keys(porEspecie).forEach(esp => {
+        if (COLOR_ESPECIE[esp]) return;
+        COLOR_ESPECIE[esp] = css('--dat-estado');
+        Object.keys(porEspecie[esp].variedades).forEach(k => { COLOR_VARIEDAD[k] = css('--dat-estado'); });
     });
 }
 
-/* Las expresiones de color son un match sobre especie o sobre la clave
-   compuesta; se reconstruyen al cambiar el selector, no en cada frame. */
+/* ── Valor de un cuartel ────────────────────────────────────────────────────
+   Un cuartel mixto lleva varias variedades del modelo. El mapa pinta una sola
+   celda, así que promedia las variedades presentes ponderando por la
+   superficie que el MODELO les asigna. El margen no se promedia como razón:
+   se recompone como EBITDA sobre ingresos, que es lo que significa. */
+function valorCuartel(p, campo, temporada) {
+    const claves = (p.modelo || []).filter(k => MIDX[k]);
+    if (!claves.length) return null;
+
+    if (campo === 'margen') {
+        let eb = 0, ing = 0;
+        claves.forEach(k => { const v = MIDX[k]; eb += v.ebitda[temporada] || 0; ing += v.ingresos[temporada] || 0; });
+        return ing ? eb / ing : null;
+    }
+    let num = 0, den = 0;
+    claves.forEach(k => {
+        const v = MIDX[k], x = v[campo] ? v[campo][temporada] : null;
+        if (x == null) return;
+        num += x * v.ha; den += v.ha;
+    });
+    return den ? num / den : null;
+}
+
+function colorEscala(valor, escala) {
+    if (valor == null) return css('--dat-sindato');
+    let i = 0;
+    while (i < escala.cortes.length && valor >= escala.cortes[i]) i++;
+    return css(escala.tokens[i]);
+}
+
+/* ── Capas ──────────────────────────────────────────────────────────────── */
 function exprColor() {
     const pares = [];
-    if (modoColor === 'especie') {
-        Object.entries(COLOR_ESPECIE).forEach(([k, c]) => pares.push(k, c));
-        return ['match', ['get', 'especie'], ...pares, css('--esp-disponible')];
+    if (modo === 'general') {
+        const tabla = modoColor === 'especie' ? null : COLOR_VARIEDAD;
+        GEO.cuarteles.features.forEach(f => {
+            const p = f.properties;
+            pares.push(p.uid, tabla ? (tabla[vkey(p.especie, p.variedad)] || css('--dat-sindato'))
+                                    : (COLOR_ESPECIE[p.especie] || css('--dat-sindato')));
+        });
+    } else {
+        const escala = escalaActiva(), campo = modo === 'produccion' ? 'rend_kg_ha' : metrica;
+        GEO.cuarteles.features.forEach(f => {
+            pares.push(f.properties.uid, colorEscala(valorCuartel(f.properties, campo, t), escala));
+        });
     }
-    Object.entries(COLOR_VARIEDAD).forEach(([k, c]) => pares.push(k, c));
-    return ['match', ['concat', ['get', 'especie'], '|', ['get', 'variedad']], ...pares, css('--esp-disponible')];
+    return ['match', ['get', 'uid'], ...pares, css('--dat-sindato')];
 }
 
 function exprFiltro() {
-    // Un match vacío no es válido: si no hay nada encendido, se filtra todo.
     if (visibles.size === 0) return ['boolean', false];
     return ['match', ['concat', ['get', 'especie'], '|', ['get', 'variedad']], [...visibles], true, false];
 }
 
-/* Se llama tanto al arrancar como cada vez que se carga un estilo nuevo: la
-   guarda evita el doble montaje cuando ambos caminos coinciden. */
 function montarCapas() {
-    if (!DATA || map.getSource('cuarteles')) return;
+    if (!GEO || map.getSource('cuarteles')) return;
 
     const puntos = {
         type: 'FeatureCollection',
-        features: DATA.cuarteles.features.map(f => ({
-            type: 'Feature', id: f.id,
-            properties: f.properties,
+        features: GEO.cuarteles.features.map(f => ({
+            type: 'Feature', id: f.id, properties: f.properties,
             geometry: { type: 'Point', coordinates: f.properties.centro }
         }))
     };
-
-    map.addSource('cuarteles', { type: 'geojson', data: DATA.cuarteles, promoteId: 'uid' });
+    map.addSource('cuarteles', { type: 'geojson', data: GEO.cuarteles, promoteId: 'uid' });
     map.addSource('etiquetas', { type: 'geojson', data: puntos });
 
     map.addLayer({
         id: 'cuarteles-fill', type: 'fill', source: 'cuarteles',
         paint: {
             'fill-color': exprColor(),
-            'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.82,
-                             ['boolean', ['feature-state', 'fijo'], false], 0.82, 0.58]
+            'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.85,
+                             ['boolean', ['feature-state', 'fijo'], false], 0.85, 0.62]
         }
     });
     // Sobre satelital el contorno se lee en blanco; sobre la base clara
@@ -625,24 +879,17 @@ function montarCapas() {
         }
     });
     map.addLayer({
-        id: 'cuarteles-label', type: 'symbol', source: 'etiquetas',
-        minzoom: 14.2,
+        id: 'cuarteles-label', type: 'symbol', source: 'etiquetas', minzoom: 14.2,
         layout: {
             'text-field': ['get', 'cuartel'],
             'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
             'text-size': ['interpolate', ['linear'], ['zoom'], 14.2, 9, 17, 13],
             'text-allow-overlap': false, 'text-padding': 2
         },
-        paint: {
-            'text-color': '#FFFFFF',
-            'text-halo-color': 'rgba(26,39,51,0.85)',
-            'text-halo-width': 1.2
-        }
+        paint: { 'text-color': '#FFFFFF', 'text-halo-color': 'rgba(26,39,51,0.85)', 'text-halo-width': 1.2 }
     });
 
     aplicarFiltro();
-    // Las capas se remontan cada vez que cambia la base, así que la visibilidad
-    // se reaplica desde los interruptores en vez de darse por sentada.
     vis('cuarteles-fill',  $('swRelleno').checked);
     vis('cuarteles-line',  $('swContorno').checked);
     vis('cuarteles-label', $('swEtiquetas').checked);
@@ -652,7 +899,7 @@ function montarCapas() {
 /* Se corre una sola vez: los listeners viven en el mapa, no en el estilo.
    Cambiar de base descarta fuentes y capas, así que el remontaje se cuelga de
    'style.load'. Con 'styledata' no alcanza: se emite antes de que el estilo
-   esté listo y addSource revienta. */
+   esté listo y addSource falla. */
 function inicializar() {
     map.on('style.load', montarCapas);
     montarCapas();
@@ -663,20 +910,16 @@ function inicializar() {
     map.on('mouseleave', 'cuarteles-fill', onLeave);
     map.on('click', 'cuarteles-fill', onClick);
     map.on('click', e => {
-        const hits = map.queryRenderedFeatures(e.point, { layers: ['cuarteles-fill'] });
-        if (!hits.length) desfijar();
+        if (!map.queryRenderedFeatures(e.point, { layers: ['cuarteles-fill'] }).length) desfijar();
     });
-    // Mapbox emite 'mouseleave' de capa sólo si el puntero sigue sobre el canvas.
-    // Al pasar del polígono a la leyenda o a los controles —que son overlays
-    // HTML— no se entera, y la ficha de hover quedaba colgada.
+    // Mapbox emite 'mouseleave' de capa sólo si el puntero sigue sobre el
+    // canvas. Al pasar del polígono a la leyenda o a los controles —que son
+    // overlays HTML— no se entera, y la ficha quedaba colgada.
     $('map').addEventListener('mouseleave', onLeave);
 }
 
 /* ── Interacción ────────────────────────────────────────────────────────── */
-function setEstado(uid, clave, valor) {
-    if (uid == null) return;
-    map.setFeatureState({ source: 'cuarteles', id: uid }, { [clave]: valor });
-}
+const setEstado = (uid, clave, valor) => { if (uid != null) map.setFeatureState({ source: 'cuarteles', id: uid }, { [clave]: valor }); };
 
 function onHover(e) {
     if (!e.features.length) return;
@@ -689,46 +932,79 @@ function onHover(e) {
     }
     if (!fijado) mostrarFicha(f.properties, e.point);
 }
-
 function onLeave() {
     map.getCanvas().style.cursor = '';
-    setEstado(hoverId, 'hover', false);
-    hoverId = null;
+    setEstado(hoverId, 'hover', false); hoverId = null;
     if (!fijado) ocultarFicha();
 }
-
 function onClick(e) {
     if (!e.features.length) return;
     const p = e.features[0].properties;
     setEstado(fijado, 'fijo', false);
-    fijado = p.uid;
-    setEstado(fijado, 'fijo', true);
+    fijado = p.uid; setEstado(fijado, 'fijo', true);
     mostrarFicha(p, e.point, true);
 }
+function desfijar() { setEstado(fijado, 'fijo', false); fijado = null; ocultarFicha(); }
 
-function desfijar() {
-    setEstado(fijado, 'fijo', false);
-    fijado = null;
-    ocultarFicha();
-}
-
-/* Las props llegan de Mapbox con los arreglos serializados a string. */
+/* Mapbox serializa los arreglos de properties a string. */
 const arr = v => { try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch (_) { return []; } };
 
 function mostrarFicha(p, punto, fija = false) {
     const card = $('card');
-    const variedades = arr(p.variedades), cuarteles = arr(p.cuarteles);
-    const color = modoColor === 'especie'
-        ? (COLOR_ESPECIE[p.especie] || css('--esp-disponible'))
-        : (COLOR_VARIEDAD[vkey(p.especie, p.variedad)] || css('--esp-disponible'));
+    const variedades = arr(p.variedades), cuarteles = arr(p.cuarteles), claves = arr(p.modelo);
+    const color = modo !== 'general'
+        ? colorEscala(valorCuartel(p, modo === 'produccion' ? 'rend_kg_ha' : metrica, t), escalaActiva())
+        : (modoColor === 'especie' ? COLOR_ESPECIE[p.especie] : COLOR_VARIEDAD[vkey(p.especie, p.variedad)]) || css('--dat-sindato');
 
-    let mix = '';
-    if (variedades.length > 1) {
-        // Las dos listas vienen en paralelo desde el KMZ: variedad i ↔ cuartel i.
-        mix = '<div class="card-mix"><div class="card-mix-title">Detalle del cuartel mixto</div>' +
-            variedades.map((v, i) => `<div class="card-chip"><span>${esc(v)}</span><span>${esc(cuarteles[i] || '—')}</span></div>`).join('') +
-            '</div>';
+    const regs = claves.map(k => MIDX[k]).filter(Boolean);
+    const haModelo = regs.reduce((a, v) => a + v.ha, 0);
+    const temporada = MOD.temporadas[t];
+
+    let bloqueModelo = '';
+    if (regs.length) {
+        const eb = valorCuartel(p, 'ebitda_ha', t), co = valorCuartel(p, 'costo_ha', t);
+        const ing = valorCuartel(p, 'ingreso_ha', t), mg = valorCuartel(p, 'margen', t);
+        const rd = valorCuartel(p, 'rend_kg_ha', t);
+        const signo = x => x == null ? '' : (x < 0 ? ' neg' : ' pos');
+        bloqueModelo = `
+            <div class="card-sec">
+                <div class="card-sec-tit">Modelo · ${esc(temporada)}</div>
+                <div class="card-kv"><span class="card-k">Rendimiento</span><span class="card-v">${miles(rd)} kg/ha</span></div>
+                <div class="card-kv"><span class="card-k">Ingresos</span><span class="card-v">${usd(ing)}/ha</span></div>
+                <div class="card-kv"><span class="card-k">Costos</span><span class="card-v">${usd(co)}/ha</span></div>
+                <div class="card-kv"><span class="card-k">EBITDA</span><span class="card-v${signo(eb)}">${usd(eb)}/ha</span></div>
+                <div class="card-kv"><span class="card-k">Margen</span><span class="card-v${signo(mg)}">${pct(mg)}</span></div>
+            </div>`;
     }
+
+    let bloqueVariedades = '';
+    if (regs.length > 1 || variedades.length > 1) {
+        bloqueVariedades = '<div class="card-sec"><div class="card-sec-tit">Variedades del cuartel</div>' +
+            regs.map(v => `<div class="card-chip"><span>${esc(v.variedad)}</span><span>${nf(v.ha, 2)} ha · ${usd(v.ebitda_ha[t])}/ha</span></div>`).join('') +
+            '</div>';
+    } else if (regs.length === 1) {
+        const v = regs[0];
+        const pl = v.plantaciones && v.plantaciones.length ? v.plantaciones : null;
+        // La tasación anota "-" donde no registró portainjerto (toda la
+        // vinífera): es un hueco, no un nombre, y no debe llegar a la ficha.
+        const patrones = pl ? [...new Set(pl.map(b => b.portainjerto).filter(x => x && x !== '-'))] : [];
+        bloqueVariedades = `
+            <div class="card-sec">
+                <div class="card-sec-tit">Variedad</div>
+                <div class="card-kv"><span class="card-k">Superficie (modelo)</span><span class="card-v">${nf(v.ha, 2)} ha</span></div>
+                <div class="card-kv"><span class="card-k">Año de plantación</span><span class="card-v">${esc(v.anio_plantacion || '—')}</span></div>
+                <div class="card-kv"><span class="card-k">Cuarteles</span><span class="card-v">${v.cuarteles.length}</span></div>
+                ${patrones.length ? `<div class="card-kv"><span class="card-k">Portainjerto</span><span class="card-v">${esc(patrones.join(', '))}</span></div>` : ''}
+                ${pl ? `<div class="card-kv"><span class="card-k">Plantas/ha</span><span class="card-v">${miles(pl[0].plantas_ha)}</span></div>
+                        <div class="card-kv"><span class="card-k">Marco</span><span class="card-v">${esc(pl[0].marco || '—')}</span></div>` : ''}
+                ${v.plantaciones_nota ? `<div class="card-nota">${esc(v.plantaciones_nota)}</div>` : ''}
+            </div>`;
+    }
+
+    const alertas = [];
+    if (!regs.length) alertas.push('Sin contraparte en el modelo financiero: el KMZ lo agrupa como <b>Disponible</b> (arrancado o no productivo). Es parte de las 311,65 ha de tasación, no de las 292,23 ha modeladas.');
+    if (p.aprox) alertas.push('Cruce aproximado con el modelo: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
+    if (regs.some(v => v.produccion_libro)) alertas.push('La producción de esta variedad se despejó desde los ingresos: el bloque PRODUCCIÓN del libro trae corridas las filas de Uva Vinífera. Ingresos, costos y EBITDA no están afectados.');
 
     card.innerHTML = `
         <div class="card-head">
@@ -738,12 +1014,13 @@ function mostrarFicha(p, punto, fija = false) {
             <button type="button" class="card-close" id="cardClose" aria-label="Cerrar"><svg viewBox="0 0 18 18" width="13" height="13"><use href="#ic-cerrar"/></svg></button>
         </div>
         <div class="card-body">
-            <div class="card-kv"><span class="card-k">Superficie</span><span class="card-v">${nf(p.ha, 2)} ha</span></div>
-            <div class="card-kv"><span class="card-k">Especie</span><span class="card-v">${esc(p.especie)}</span></div>
-            <div class="card-kv"><span class="card-k">Variedad</span><span class="card-v">${esc(p.variedad)}</span></div>
-            <div class="card-kv"><span class="card-k">ID interno</span><span class="card-v">${esc(p.uid)}</span></div>
+            ${regs.length ? `<div class="card-kv"><span class="card-k">Superficie del modelo</span><span class="card-v">${nf(haModelo, 2)} ha</span></div>` : ''}
             ${p.nota ? `<div class="card-nota">${esc(p.nota)}</div>` : ''}
-            ${mix}
+            ${bloqueModelo}
+            ${bloqueVariedades}
+            ${variedades.length > 1 ? `<div class="card-sec"><div class="card-sec-tit">Detalle del cuartel mixto</div>${
+                variedades.map((v, i) => `<div class="card-chip"><span>${esc(v)}</span><span>${esc(cuarteles[i] || '—')}</span></div>`).join('')}</div>` : ''}
+            ${alertas.map(a => `<div class="card-alerta">${a}</div>`).join('')}
             <div class="card-hint">${fija ? 'Ficha fijada · clic fuera para soltarla' : 'Clic para fijar esta ficha'}</div>
         </div>`;
 
@@ -753,46 +1030,51 @@ function mostrarFicha(p, punto, fija = false) {
     posicionarFicha(punto);
 }
 
-/* La ficha se abre al lado del cursor y se pliega hacia dentro cuando quedaría
-   fuera de la ventana; nunca tapa el cursor. */
 function posicionarFicha(punto) {
     const card = $('card'), r = card.getBoundingClientRect();
+    const limite = document.body.classList.contains('panel-abierto') ? window.innerWidth - 392 : window.innerWidth;
     let x = punto.x + 16, y = punto.y + 14;
-    if (x + r.width > window.innerWidth - 12) x = punto.x - r.width - 16;
-    if (y + r.height > window.innerHeight - 12) y = Math.max(12, punto.y - r.height - 14);
+    if (x + r.width > limite - 12) x = punto.x - r.width - 16;
+    if (y + r.height > window.innerHeight - 12) y = Math.max(12, window.innerHeight - r.height - 12);
     card.style.left = Math.max(12, x) + 'px';
     card.style.top = y + 'px';
 }
+const ocultarFicha = () => $('card').classList.remove('visible', 'fija');
 
-function ocultarFicha() { $('card').classList.remove('visible', 'fija'); }
-
-const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-/* ── Leyenda: árbol especie → variedad, cada nodo enciende y apaga ──────── */
+/* ── Leyenda ────────────────────────────────────────────────────────────── */
 function construirLeyenda() {
-    const body = $('legendBody');
-    body.innerHTML = DATA.por_especie.map(esp => {
-        const vars = esp.variedades.map(v => {
-            const k = vkey(esp.especie, v.variedad);
-            return `<div class="lg-row" data-vkey="${esc(k)}">
-                        <i class="lg-dot" style="background:${COLOR_VARIEDAD[k]}"></i>
-                        <span class="lg-name">${esc(v.variedad)}</span>
-                        <span class="lg-meta">${nf(v.ha, 1)} ha</span>
-                    </div>`;
-        }).join('');
-        return `<div class="lg-esp abierta" data-especie="${esc(esp.especie)}">
+    const porEspecie = {};
+    GEO.cuarteles.features.forEach(f => {
+        const p = f.properties;
+        const e = porEspecie[p.especie] || (porEspecie[p.especie] = { cuarteles: 0, variedades: {} });
+        e.cuarteles++;
+        const k = vkey(p.especie, p.variedad);
+        (e.variedades[k] || (e.variedades[k] = { variedad: p.variedad, cuarteles: 0 })).cuarteles++;
+    });
+    const orden = Object.keys(porEspecie).sort((a, b) => (HA_ESPECIE[b] || 0) - (HA_ESPECIE[a] || 0));
+
+    $('legendBody').innerHTML = orden.map(esp => {
+        const e = porEspecie[esp];
+        const vars = Object.entries(e.variedades).sort((a, b) => (HA_VKEY[b[0]] || 0) - (HA_VKEY[a[0]] || 0));
+        const filas = vars.map(([k, v]) => `
+            <div class="lg-row" data-vkey="${esc(k)}">
+                <i class="lg-dot" style="background:${COLOR_VARIEDAD[k]}"></i>
+                <span class="lg-name">${esc(v.variedad)}</span>
+                <span class="lg-meta">${HA_VKEY[k] ? nf(HA_VKEY[k], 1) + ' ha' : '—'}</span>
+            </div>`).join('');
+        return `<div class="lg-esp abierta" data-especie="${esc(esp)}">
                     <div class="lg-row lg-esp-row">
                         <span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>
-                        <i class="lg-dot" style="background:${COLOR_ESPECIE[esp.especie]}"></i>
-                        <span class="lg-name">${esc(esp.especie)}</span>
-                        <span class="lg-meta">${esp.cuarteles} · ${nf(esp.ha, 1)} ha</span>
+                        <i class="lg-dot" style="background:${COLOR_ESPECIE[esp]}"></i>
+                        <span class="lg-name">${esc(esp)}</span>
+                        <span class="lg-meta">${e.cuarteles} · ${HA_ESPECIE[esp] ? nf(HA_ESPECIE[esp], 1) + ' ha' : 's/m'}</span>
                     </div>
-                    <div class="lg-vars">${vars}</div>
+                    <div class="lg-vars">${filas}</div>
                 </div>`;
     }).join('');
 
     // Un clic en el nombre enciende o apaga; el caret sólo pliega la rama.
-    body.querySelectorAll('.lg-esp-row').forEach(row => {
+    $('legendBody').querySelectorAll('.lg-esp-row').forEach(row => {
         row.addEventListener('click', ev => {
             const esp = row.closest('.lg-esp');
             if (ev.target.closest('.lg-caret')) { esp.classList.toggle('abierta'); return; }
@@ -802,7 +1084,7 @@ function construirLeyenda() {
             aplicarFiltro();
         });
     });
-    body.querySelectorAll('.lg-vars .lg-row').forEach(row => {
+    $('legendBody').querySelectorAll('.lg-vars .lg-row').forEach(row => {
         row.addEventListener('click', () => {
             const k = row.dataset.vkey;
             visibles.has(k) ? visibles.delete(k) : visibles.add(k);
@@ -810,19 +1092,23 @@ function construirLeyenda() {
         });
     });
 
-    $('legendSub').textContent = DATA.totales.especies + ' especies · ' + DATA.totales.variedades + ' variedades';
+    $('legendSub').textContent = MOD.variedades.length + ' variedades modeladas · ' + nf(MOD.totales.ha, 2) + ' ha';
 }
 
-/* Los puntos de variedad siguen al modo de color: si el mapa está pintado por
-   especie, una leyenda con 26 colores distintos prometería una distinción que
-   el mapa no hace. */
+/* Los puntos siguen al modo: si el mapa está pintado por especie o por una
+   escala continua, una leyenda con 26 colores de variedad prometería una
+   distinción que el mapa no está haciendo. */
 function pintarDots() {
+    const porEscala = modo !== 'general';
     document.querySelectorAll('.lg-vars .lg-row').forEach(row => {
         const k = row.dataset.vkey;
-        const color = modoColor === 'especie'
-            ? COLOR_ESPECIE[k.split('|')[0]]
-            : COLOR_VARIEDAD[k];
+        const color = porEscala ? css('--dat-sindato')
+            : modoColor === 'especie' ? COLOR_ESPECIE[k.split('|')[0]] : COLOR_VARIEDAD[k];
         row.querySelector('.lg-dot').style.background = color;
+        row.querySelector('.lg-dot').style.opacity = porEscala ? 0.35 : '';
+    });
+    document.querySelectorAll('.lg-esp-row .lg-dot').forEach(dot => {
+        dot.style.opacity = porEscala ? 0.35 : '';
     });
 }
 
@@ -836,65 +1122,333 @@ function pintarLeyenda() {
     });
 }
 
-/* El filtro es la única puerta: capas, métricas y leyenda leen el mismo set. */
+function pintarEscala() {
+    const caja = $('escala');
+    if (modo === 'general') { caja.hidden = true; return; }
+    const e = escalaActiva();
+    const ticks = e.cortes.map(c => e.fmt === pct ? pct(c) : (Math.abs(c) >= 1000 ? Math.round(c / 1000) + 'k' : String(c)));
+    caja.hidden = false;
+    caja.innerHTML = `
+        <div class="escala-tit">${esc(e.titulo)}</div>
+        <div class="escala-sub">${esc(e.unidad)} · ${esc(MOD.temporadas[t])}</div>
+        <div class="escala-barra">${e.tokens.map(tk => `<i style="background:${css(tk)}"></i>`).join('')}</div>
+        <div class="escala-ticks">${ticks.map(x => `<span>${esc(x)}</span>`).join('')}</div>
+        <div class="escala-nd"><i style="background:${css('--dat-sindato')}"></i>Sin contraparte en el modelo</div>`;
+}
+
+/* El filtro es la única puerta: capas, métricas, leyenda y panel leen el mismo set. */
 function aplicarFiltro() {
     const f = exprFiltro();
     ['cuarteles-fill', 'cuarteles-line', 'cuarteles-label'].forEach(id => {
         if (map.getLayer(id)) map.setFilter(id, f);
     });
     if (fijado) {
-        const p = DATA.cuarteles.features.find(x => x.properties.uid === fijado);
+        const p = GEO.cuarteles.features.find(x => x.properties.uid === fijado);
         if (p && !visibles.has(vkey(p.properties.especie, p.properties.variedad))) desfijar();
     }
-    pintarLeyenda();
-    pintarMetricas();
+    pintarLeyenda(); pintarMetricas(); pintarPanel();
+}
+
+function repintar() {
+    if (map.getLayer('cuarteles-fill')) map.setPaintProperty('cuarteles-fill', 'fill-color', exprColor());
+    pintarDots(); pintarEscala(); pintarMetricas(); pintarPanel();
+}
+
+/* ── Métricas ───────────────────────────────────────────────────────────── */
+const clavesVisibles = () => {
+    const s = new Set();
+    GEO.cuarteles.features.forEach(f => {
+        const p = f.properties;
+        if (visibles.has(vkey(p.especie, p.variedad))) (p.modelo || []).forEach(k => s.add(k));
+    });
+    return [...s].map(k => MIDX[k]).filter(Boolean);
+};
+
+function agregado(regs, temporada) {
+    const ha = regs.reduce((a, v) => a + v.ha, 0);
+    const suma = campo => regs.reduce((a, v) => a + (v[campo][temporada] || 0), 0);
+    const ingresos = suma('ingresos'), costos = suma('costos'), ebitda = suma('ebitda');
+    // Los kilos se suman ya convertidos: sumar la producción cruda mezclaría
+    // cajas de uva de mesa con kilos de cereza en el mismo total.
+    const kg = regs.reduce((a, v) => a + (v.produccion[temporada] || 0) * (v.kg_por_unidad || 1), 0);
+    return { ha, kg, ingresos, costos, ebitda, ebitda_ha: ha ? ebitda / ha : null, margen: ingresos ? ebitda / ingresos : null };
 }
 
 function pintarMetricas() {
-    const enPantalla = DATA.cuarteles.features.filter(f => visibles.has(vkey(f.properties.especie, f.properties.variedad)));
-    const ha = enPantalla.reduce((a, f) => a + f.properties.ha, 0);
-    const esp = new Set(enPantalla.map(f => f.properties.especie));
-    const totales = DATA.totales;
-    // La fracción del predio va dentro de la etiqueta de hectáreas, no como una
-    // quinta métrica: la barra está anclada a la derecha y al crecer se metía
-    // debajo de la barra de pestañas.
-    const parcial = enPantalla.length && enPantalla.length < totales.cuarteles;
-    const pct = parcial ? ` · ${Math.round(ha / totales.ha * 100)}%` : '';
-    const plural = (n, sing, pl) => n === 1 ? sing : pl;
+    const regs = clavesVisibles(), a = agregado(regs, t);
+    const cuarteles = GEO.cuarteles.features.filter(f => visibles.has(vkey(f.properties.especie, f.properties.variedad))).length;
+    const plural = (n, s, p) => n === 1 ? s : p;
+    const parcial = a.ha && a.ha < MOD.totales.ha ? ` · ${Math.round(a.ha / MOD.totales.ha * 100)}%` : '';
+
+    if (modo === 'general') {
+        $('statsBar').innerHTML = `
+            <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">Hectáreas${parcial}</span></div>
+            <div class="stat"><span class="stat-val">${cuarteles}</span><span class="stat-lbl">${plural(cuarteles, 'Cuartel', 'Cuarteles')}</span></div>
+            <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
+        return;
+    }
+    if (modo === 'produccion') {
+        $('statsBar').innerHTML = `
+            <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">Hectáreas${parcial}</span></div>
+            <div class="stat"><span class="stat-val">${nf(a.kg / 1000, 0)}</span><span class="stat-lbl">Toneladas</span></div>
+            <div class="stat"><span class="stat-val">${miles(a.ha ? a.kg / a.ha : null)}</span><span class="stat-lbl">kg / ha</span></div>
+            <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
+        return;
+    }
     $('statsBar').innerHTML = `
-        <div class="stat"><span class="stat-val">${nf(ha, 1)}</span><span class="stat-lbl">Hectáreas${pct}</span></div>
-        <div class="stat"><span class="stat-val">${enPantalla.length}</span><span class="stat-lbl">${plural(enPantalla.length, 'Cuartel', 'Cuarteles')}</span></div>
-        <div class="stat"><span class="stat-val">${esp.size}</span><span class="stat-lbl">${plural(esp.size, 'Especie', 'Especies')}</span></div>
-        <div class="stat"><span class="stat-val">${visibles.size}</span><span class="stat-lbl">${plural(visibles.size, 'Variedad', 'Variedades')}</span></div>`;
+        <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">Hectáreas${parcial}</span></div>
+        <div class="stat"><span class="stat-val">${miles(a.ingresos)}</span><span class="stat-lbl">Ingresos US$</span></div>
+        <div class="stat"><span class="stat-val">${miles(a.costos)}</span><span class="stat-lbl">Costos US$</span></div>
+        <div class="stat"><span class="stat-val${a.ebitda < 0 ? ' neg' : ''}">${miles(a.ebitda)}</span><span class="stat-lbl">EBITDA US$</span></div>
+        <div class="stat"><span class="stat-val${a.ebitda_ha < 0 ? ' neg' : ''}">${miles(a.ebitda_ha)}</span><span class="stat-lbl">EBITDA/ha</span></div>`;
 }
 
-/* ── Controles ──────────────────────────────────────────────────────────── */
-$('selColor').addEventListener('change', e => {
-    modoColor = e.target.value;
-    if (map.getLayer('cuarteles-fill')) map.setPaintProperty('cuarteles-fill', 'fill-color', exprColor());
-    pintarDots();
-});
+/* ── Panel del modelo ───────────────────────────────────────────────────── */
+function pintarPanel() {
+    if (!document.body.classList.contains('panel-abierto')) return;
+    const regs = clavesVisibles(), a = agregado(regs, t);
+    $('mpKpis').innerHTML = `
+        <div class="mp-kpi"><div class="mp-kpi-val${a.ebitda < 0 ? ' neg' : ''}">${usd(a.ebitda)}</div><div class="mp-kpi-lbl">EBITDA ${esc(MOD.temporadas[t])}</div></div>
+        <div class="mp-kpi"><div class="mp-kpi-val${a.ebitda_ha < 0 ? ' neg' : ''}">${usd(a.ebitda_ha)}</div><div class="mp-kpi-lbl">EBITDA por hectárea</div></div>
+        <div class="mp-kpi"><div class="mp-kpi-val">${usd(a.ingresos)}</div><div class="mp-kpi-lbl">Ingresos</div></div>
+        <div class="mp-kpi"><div class="mp-kpi-val">${usd(a.costos)}</div><div class="mp-kpi-lbl">Costos</div></div>`;
+    dibujarGrafico(regs);
+    pintarTabla(regs);
+    pintarConciliacion();
+}
 
-$('btnTodo').addEventListener('click', () => {
-    Object.keys(COLOR_VARIEDAD).forEach(k => visibles.add(k));
-    aplicarFiltro();
-});
+function pintarTabla(regs) {
+    const cols = [
+        { k: 'variedad', t: 'Variedad', fmt: v => esc(v.variedad) },
+        { k: 'ha', t: 'ha', fmt: v => nf(v.ha, 1) },
+        { k: 'rend_kg_ha', t: 'kg/ha', fmt: v => miles(v.rend_kg_ha[t]) },
+        { k: 'costo_ha', t: 'Costo/ha', fmt: v => miles(v.costo_ha[t]) },
+        { k: 'ebitda_ha', t: 'EBITDA/ha', fmt: v => miles(v.ebitda_ha[t]) },
+        { k: 'margen', t: 'Margen', fmt: v => pct(v.margen[t]) }
+    ];
+    const valor = (v, k) => k === 'variedad' ? v.variedad : (Array.isArray(v[k]) ? v[k][t] : v[k]);
+    const filas = [...regs].sort((x, y) => {
+        const a = valor(x, ordenTabla.campo), b = valor(y, ordenTabla.campo);
+        const cmp = typeof a === 'string' ? a.localeCompare(b, 'es') : (a || 0) - (b || 0);
+        return ordenTabla.asc ? cmp : -cmp;
+    });
+
+    $('tabla').innerHTML = `
+        <thead><tr>${cols.map(c => `<th data-k="${c.k}" class="${ordenTabla.campo === c.k ? 'orden' + (ordenTabla.asc ? ' asc' : '') : ''}">${c.t}</th>`).join('')}</tr></thead>
+        <tbody>${filas.map(v => {
+            const clave = vkey(v.especie, v.variedad);
+            const color = COLOR_VARIEDAD[VKEY_DE_MODELO[clave]] || css('--dat-sindato');
+            return `<tr data-variedad="${esc(clave)}">
+                <td><i class="lg-dot" style="background:${color}"></i>${esc(v.variedad)}</td>
+                <td>${nf(v.ha, 1)}</td>
+                <td>${miles(v.rend_kg_ha[t])}</td>
+                <td>${miles(v.costo_ha[t])}</td>
+                <td class="${v.ebitda_ha[t] < 0 ? 'neg' : ''}">${miles(v.ebitda_ha[t])}</td>
+                <td class="${v.margen[t] < 0 ? 'neg' : ''}">${pct(v.margen[t])}</td>
+            </tr>`;
+        }).join('')}</tbody>`;
+
+    $('tabla').querySelectorAll('th').forEach(th => {
+        th.addEventListener('click', () => {
+            const k = th.dataset.k;
+            ordenTabla = { campo: k, asc: ordenTabla.campo === k ? !ordenTabla.asc : k === 'variedad' };
+            pintarTabla(clavesVisibles());
+        });
+    });
+    $('tabla').querySelectorAll('tbody tr').forEach(tr => {
+        tr.addEventListener('click', () => volarAVariedad(tr.dataset.variedad));
+    });
+}
+
+function pintarConciliacion() {
+    const c = MOD.conciliacion_superficie;
+    $('conc').innerHTML = c.map((r, i) => {
+        const clase = r.ha < 0 ? 'resta' : (i === c.length - 1 ? 'total' : '');
+        return `<tr class="${clase}"><td>${esc(r.concepto)}<br><span style="color:var(--sem-text-3);font-size:9.5px">${esc(r.nota)}</span></td><td>${nf(r.ha, 2)} ha</td></tr>`;
+    }).join('');
+    $('concNota').innerHTML = 'Las 292,23 ha son la base de todo el modelo. El mapa nunca usa la superficie del polígono del KMZ: ' +
+        'un contorno dibujado no es una medición, y mezclarlo con la tasación descuadraría los totales.';
+
+    const av = MOD.avisos, partes = [];
+    if (av.produccion_incoherente && av.produccion_incoherente.length) {
+        partes.push('<div class="mp-aviso"><b>Revisar el libro.</b> En la hoja <i>Consolidado por variedad</i>, el bloque PRODUCCIÓN trae corridas una fila las cuatro variedades de Uva Vinífera, y la última carga el total de la especie. ' +
+            'Ingresos, costos y EBITDA están correctos —cuadran con ha × rendimiento de <i>Inputs Generales</i>—, así que la plata no está afectada. ' +
+            'El mapa despeja la producción desde los ingresos para estas cuatro: ' + av.produccion_incoherente.map(x => esc(x.split(' / ')[1])).join(', ') + '.</div>');
+    }
+    if (av.variedades_sin_cuartel && av.variedades_sin_cuartel.length) {
+        partes.push('<div class="mp-aviso"><b>Sin polígono en el KMZ.</b> ' + av.variedades_sin_cuartel.map(esc).join(' y ') +
+            ' están en el modelo pero no tienen cuartel dibujado, así que no se pintan en el mapa aunque sí suman en los totales.</div>');
+    }
+    $('avisos').innerHTML = partes.join('');
+}
+
+function volarAVariedad(clave) {
+    const feats = GEO.cuarteles.features.filter(f => (f.properties.modelo || []).includes(clave));
+    if (!feats.length) return;
+    const lons = feats.map(f => f.properties.centro[0]), lats = feats.map(f => f.properties.centro[1]);
+    map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+        { padding: relleno(), maxZoom: 16.5, duration: 800 });
+}
+
+/* ── Gráfico ────────────────────────────────────────────────────────────────
+   Dos vistas, un eje cada una. Nunca dos escalas en el mismo par de ejes: la
+   serie son tres magnitudes en US$ y el ranking una sola en US$/ha. */
+const VIZ = { s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a' };
+
+/* Etiqueta directa al final de cada línea: con tres series la leyenda sola
+   obliga a ir y volver entre el color y el nombre. */
+const etiquetasAlFinal = {
+    id: 'etiquetasAlFinal',
+    afterDatasetsDraw(ch) {
+        const { ctx } = ch;
+        ctx.save();
+        ctx.font = '500 10px "Fira Sans", sans-serif';
+        ctx.textBaseline = 'middle';
+        ch.data.datasets.forEach((ds, i) => {
+            const meta = ch.getDatasetMeta(i);
+            if (meta.hidden) return;
+            const pt = meta.data[meta.data.length - 1];
+            if (!pt) return;
+            ctx.fillStyle = ds.borderColor;
+            ctx.fillText(ds.label, Math.min(pt.x + 5, ch.chartArea.right - 46), pt.y);
+        });
+        ctx.restore();
+    }
+};
+
+function dibujarGrafico(regs) {
+    const cv = $('chart');
+    if (grafico) { grafico.destroy(); grafico = null; }
+    // El ranking crece con las variedades encendidas: a altura fija, treinta y
+    // una etiquetas se pisan unas con otras y el gráfico deja de leerse.
+    cv.parentElement.style.height = vistaGrafico === 'ranking'
+        ? Math.max(200, regs.length * 15 + 46) + 'px' : '250px';
+
+    const ejeComun = {
+        grid: { color: css('--viz-grid'), drawTicks: false },
+        border: { color: css('--viz-axis') },
+        ticks: { color: css('--viz-muted'), font: { family: 'Fira Sans', size: 10 } }
+    };
+
+    if (vistaGrafico === 'serie') {
+        const serie = campo => MOD.temporadas.map((_, i) => agregado(regs, i)[campo]);
+        grafico = new Chart(cv, {
+            type: 'line',
+            data: {
+                labels: MOD.temporadas.map(s => s.slice(2, 4) + '-' + s.slice(7, 9)),
+                datasets: [
+                    { label: 'Ingresos', data: serie('ingresos'), borderColor: VIZ.s1, backgroundColor: VIZ.s1 },
+                    { label: 'Costos',   data: serie('costos'),   borderColor: VIZ.s2, backgroundColor: VIZ.s2 },
+                    { label: 'EBITDA',   data: serie('ebitda'),   borderColor: VIZ.s3, backgroundColor: VIZ.s3 }
+                ].map(d => ({ ...d, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4.5, tension: 0.15 }))
+            },
+            options: {
+                maintainAspectRatio: false,
+                layout: { padding: { right: 48 } },
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: 'circle', color: css('--sem-text-2'), font: { family: 'Fira Sans', size: 10 } } },
+                    tooltip: {
+                        callbacks: {
+                            title: it => MOD.temporadas[it[0].dataIndex],
+                            label: it => it.dataset.label + ': ' + usd(it.raw)
+                        }
+                    }
+                },
+                scales: {
+                    x: ejeComun,
+                    y: { ...ejeComun, ticks: { ...ejeComun.ticks, callback: v => (v / 1e6).toFixed(1) + 'M' } }
+                }
+            },
+            plugins: [etiquetasAlFinal]
+        });
+        $('chartNota').textContent = 'Millones de US$ por temporada, sobre las ' + nf(agregado(regs, t).ha, 1) +
+            ' ha encendidas en la leyenda. La serie se aplana en 2028-2029: de ahí en adelante el modelo asume plena producción.';
+        return;
+    }
+
+    const filas = [...regs].sort((a, b) => (a.ebitda_ha[t] || 0) - (b.ebitda_ha[t] || 0));
+    grafico = new Chart(cv, {
+        type: 'bar',
+        data: {
+            labels: filas.map(v => v.variedad),
+            datasets: [{
+                label: 'EBITDA/ha',
+                data: filas.map(v => v.ebitda_ha[t]),
+                backgroundColor: filas.map(v => colorEscala(v.ebitda_ha[t], ESCALAS.ebitda_ha)),
+                borderRadius: 4, borderSkipped: false,
+                categoryPercentage: 0.82, barPercentage: 0.9
+            }]
+        },
+        options: {
+            indexAxis: 'y', maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: it => usd(it.raw) + '/ha · ' + nf(filas[it.dataIndex].ha, 1) + ' ha' } }
+            },
+            scales: {
+                x: { ...ejeComun, ticks: { ...ejeComun.ticks, callback: v => Math.round(v / 1000) + 'k' } },
+                y: { ...ejeComun, grid: { display: false }, ticks: { ...ejeComun.ticks, autoSkip: false, font: { family: 'Fira Sans', size: 9 } } }
+            }
+        }
+    });
+    $('chartNota').textContent = 'US$/ha en ' + MOD.temporadas[t] + '. Mismos cortes y mismos colores que el mapa, ' +
+        'así que una barra y su polígono se leen igual.';
+}
+
+/* ── Selectores y modos ─────────────────────────────────────────────────── */
+function construirSelectores() {
+    $('selTemporada').innerHTML = MOD.temporadas.map((s, i) =>
+        `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === 3 ? ' · plena producción' : ''}</option>`).join('');
+    $('selMetrica').innerHTML = METRICAS_FIN.map(m =>
+        `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`).join('');
+}
+
+function cambiarModo(nuevo) {
+    modo = nuevo;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
+    document.body.classList.toggle('modo-dato', modo !== 'general');
+    $('grpColor').hidden = modo !== 'general';
+    $('grpMetrica').hidden = modo !== 'financiero';
+    $('grpTemporada').hidden = modo === 'general';
+    if (modo !== 'general' && !document.body.classList.contains('panel-abierto')) togglePanel(true);
+    repintar();
+}
+
+function togglePanel(abrir) {
+    document.body.classList.toggle('panel-abierto', abrir);
+    $('btnPanel').classList.toggle('abierta', abrir);
+    if (abrir) pintarPanel();
+    map.resize();
+}
+
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => cambiarModo(b.dataset.modo)));
+$('selColor').addEventListener('change', e => { modoColor = e.target.value; repintar(); });
+$('selMetrica').addEventListener('change', e => { metrica = e.target.value; repintar(); });
+$('selTemporada').addEventListener('change', e => { t = +e.target.value; repintar(); if (fijado) desfijar(); });
+$('btnPanel').addEventListener('click', () => togglePanel(!document.body.classList.contains('panel-abierto')));
+$('mpCerrar').addEventListener('click', () => togglePanel(false));
+document.querySelectorAll('.mp-sect-head').forEach(h => h.addEventListener('click', () => {
+    h.closest('.mp-sect').classList.toggle('abierta');
+    if (grafico) grafico.resize();
+}));
+document.querySelectorAll('.mp-chart-tab').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.mp-chart-tab').forEach(x => x.classList.toggle('active', x === b));
+    vistaGrafico = b.dataset.vista;
+    dibujarGrafico(clavesVisibles());
+}));
+
+$('btnTodo').addEventListener('click', () => { Object.keys(COLOR_VARIEDAD).forEach(k => visibles.add(k)); aplicarFiltro(); });
 $('btnNada').addEventListener('click', () => { visibles.clear(); aplicarFiltro(); });
 
-function conmutar(id, fn) { $(id).addEventListener('change', e => fn(e.target.checked)); }
+const conmutar = (id, fn) => $(id).addEventListener('change', e => fn(e.target.checked));
 const vis = (capa, on) => { if (map.getLayer(capa)) map.setLayoutProperty(capa, 'visibility', on ? 'visible' : 'none'); };
-
 conmutar('swRelleno',   on => vis('cuarteles-fill', on));
 conmutar('swContorno',  on => vis('cuarteles-line', on));
 conmutar('swEtiquetas', on => vis('cuarteles-label', on));
 conmutar('swLeyenda',   on => document.body.classList.toggle('legend-off', !on));
 conmutar('swMetricas',  on => { $('statsBar').style.display = on ? 'flex' : 'none'; });
-
-/* Cambiar de base tira las capas con el estilo: hay que volver a montarlas. */
-conmutar('swSatelital', on => {
-    estiloSatelital = on;
-    map.setStyle(on ? ESTILO_SAT : ESTILO_CLARO);   // 'style.load' remonta las capas
-});
+conmutar('swSatelital', on => { estiloSatelital = on; map.setStyle(on ? ESTILO_SAT : ESTILO_CLARO); });
 
 $('btnVista').addEventListener('click', () => {
     const pop = $('popVista'), abierto = !pop.hidden;
@@ -911,29 +1465,38 @@ document.addEventListener('click', e => {
 });
 
 $('btnEncuadrar').addEventListener('click', () => encuadrar(true));
+
+/* El relleno se calcula contra el tamaño real del mapa, no con números fijos.
+   Con el panel abierto el mapa baja a ~700 px y un relleno izquierdo de 300 px
+   —el ancho de la leyenda— más 60 a la derecha se come más de la mitad del
+   ancho: ahí Mapbox deja de encuadrar y el predio se sale de la vista. */
+function relleno() {
+    const c = map.getContainer(), w = c.offsetWidth, h = c.offsetHeight;
+    const izq = document.body.classList.contains('legend-off') ? 24 : Math.min(300, Math.round(w * 0.3));
+    const der = Math.min(60, Math.round(w * 0.08));
+    return {
+        left: izq, right: der,
+        top: Math.min(108, Math.round(h * 0.15)),
+        bottom: Math.min(80, Math.round(h * 0.12))
+    };
+}
+
 function encuadrar(animar) {
-    const b = DATA.bbox;
-    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], {
-        padding: { top: 108, bottom: 60, left: 300, right: 60 },
-        duration: animar ? 800 : 0
-    });
+    const b = GEO.bbox;
+    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: relleno(), duration: animar ? 800 : 0 });
 }
 
 /* ── Búsqueda ───────────────────────────────────────────────────────────── */
 function construirDatalist() {
-    const dl = $('dlCuarteles');
-    dl.innerHTML = DATA.cuarteles.features
-        .map(f => `<option value="${esc(f.properties.cuartel)} — ${esc(f.properties.variedad)}"></option>`)
-        .join('');
+    $('dlCuarteles').innerHTML = GEO.cuarteles.features
+        .map(f => `<option value="${esc(f.properties.cuartel)} — ${esc(f.properties.variedad)}"></option>`).join('');
 }
-
 $('inpBuscar').addEventListener('input', e => {
     const q = e.target.value.trim().toLowerCase();
     if (q.length < 2) return;
-    const f = DATA.cuarteles.features.find(x => {
+    const f = GEO.cuarteles.features.find(x => {
         const p = x.properties;
-        return (p.cuartel + ' — ' + p.variedad).toLowerCase() === q ||
-               p.cuartel.toLowerCase() === q;
+        return (p.cuartel + ' — ' + p.variedad).toLowerCase() === q || p.cuartel.toLowerCase() === q;
     });
     if (!f) return;
     const k = vkey(f.properties.especie, f.properties.variedad);
@@ -941,8 +1504,7 @@ $('inpBuscar').addEventListener('input', e => {
     map.flyTo({ center: f.properties.centro, zoom: 16.4, duration: 900 });
     map.once('moveend', () => {
         setEstado(fijado, 'fijo', false);
-        fijado = f.properties.uid;
-        setEstado(fijado, 'fijo', true);
+        fijado = f.properties.uid; setEstado(fijado, 'fijo', true);
         mostrarFicha(f.properties, map.project(f.properties.centro), true);
     });
 });

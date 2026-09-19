@@ -5,6 +5,12 @@ El KMZ viene ordenado como Folder(especie) > Folder(variedad) > Placemark(poligo
 El nombre del placemark tiene la forma "<variedades> - <cuarteles>", separados por
 un guion largo. Cuando el cuartel es mixto, ambos lados traen varios valores
 separados por "/" y se mantienen en paralelo.
+
+El KMZ aporta geometria e identidad de cuartel, y nada mas: NO se emite ninguna
+superficie derivada del poligono. Las hectareas del predio son las del modelo
+financiero (292,23 ha productivas), que vienen de la ficha tecnica y la
+tasacion. El area del poligono se calcula solo para ponderar el centroide, que
+es donde se ancla la etiqueta del cuartel.
 """
 import datetime
 import json
@@ -67,8 +73,11 @@ def ring_area_m2(ring, lat0):
     return abs(acc) / 2.0
 
 
-def geometry_metrics(polys):
-    """Superficie en ha y centroide ponderado por area."""
+def centroide(polys):
+    """Centroide ponderado por el area de cada poligono.
+
+    El area se usa solo como peso: no sale de esta funcion ni llega al JSON.
+    """
     lats = [pt[1] for rings in polys for ring in rings for pt in ring]
     lat0 = sum(lats) / len(lats)
     area = 0.0
@@ -85,7 +94,7 @@ def geometry_metrics(polys):
         ring = polys[0][0]
         cx = sum(p[0] for p in ring) / len(ring)
         cy = lat0
-    return round(area / 10000.0, 3), [round(cx, 6), round(cy, 6)]
+    return [round(cx, 6), round(cy, 6)]
 
 
 def split_name(name, folder_variedad):
@@ -146,7 +155,7 @@ def main():
                 seq[0] += 1
                 nombre = child_text(el, "name")
                 variedades, cuarteles, nota = split_name(nombre, variedad or "")
-                ha, centro = geometry_metrics(polys)
+                centro = centroide(polys)
                 features.append({
                     "type": "Feature",
                     "id": seq[0],
@@ -160,7 +169,6 @@ def main():
                         "cuarteles": cuarteles,
                         "mixto": len(variedades) > 1,
                         "nota": nota,
-                        "ha": ha,
                         "centro": centro,
                     },
                     "geometry": {
@@ -177,19 +185,18 @@ def main():
     lats = [p[1] for p in pts]
     bbox = [round(min(lons), 6), round(min(lats), 6), round(max(lons), 6), round(max(lats), 6)]
 
+    # Conteos de cuarteles, sin superficie: las hectareas las pone el modelo.
     por_especie = {}
     for f in features:
         p = f["properties"]
-        esp = por_especie.setdefault(p["especie"], {"especie": p["especie"], "cuarteles": 0, "ha": 0.0, "variedades": {}})
+        esp = por_especie.setdefault(p["especie"], {"especie": p["especie"], "cuarteles": 0, "variedades": {}})
         esp["cuarteles"] += 1
-        esp["ha"] = round(esp["ha"] + p["ha"], 3)
-        var = esp["variedades"].setdefault(p["variedad"], {"variedad": p["variedad"], "cuarteles": 0, "ha": 0.0})
+        var = esp["variedades"].setdefault(p["variedad"], {"variedad": p["variedad"], "cuarteles": 0})
         var["cuarteles"] += 1
-        var["ha"] = round(var["ha"] + p["ha"], 3)
 
     resumen = []
-    for esp in sorted(por_especie.values(), key=lambda e: -e["ha"]):
-        esp["variedades"] = sorted(esp["variedades"].values(), key=lambda v: -v["ha"])
+    for esp in sorted(por_especie.values(), key=lambda e: -e["cuarteles"]):
+        esp["variedades"] = sorted(esp["variedades"].values(), key=lambda v: -v["cuarteles"])
         resumen.append(esp)
 
     out = {
@@ -200,7 +207,6 @@ def main():
         "center": [round((bbox[0] + bbox[2]) / 2, 6), round((bbox[1] + bbox[3]) / 2, 6)],
         "totales": {
             "cuarteles": len(features),
-            "ha": round(sum(f["properties"]["ha"] for f in features), 2),
             "especies": len(resumen),
             "variedades": sum(len(e["variedades"]) for e in resumen),
         },
@@ -210,9 +216,9 @@ def main():
 
     dest = root_dir / "geo_data.json"
     dest.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print("OK %s  cuarteles=%d  ha=%s" % (dest, len(features), out["totales"]["ha"]))
+    print("OK %s  cuarteles=%d" % (dest, len(features)))
     for e in resumen:
-        print("  %-16s %4d cuarteles %9.2f ha  %d variedades" % (e["especie"], e["cuarteles"], e["ha"], len(e["variedades"])))
+        print("  %-16s %4d cuarteles  %d variedades" % (e["especie"], e["cuarteles"], len(e["variedades"])))
 
 
 if __name__ == "__main__":
