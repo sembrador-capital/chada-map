@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="841" viewBox="0 0 820 841" font-family="Fira Sans, Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="820" height="841" fill="#FFFFFF"/>
+<text x="20" y="34" font-size="17" font-weight="600" fill="#1A2733">EBITDA por hectárea, por variedad</text>
+<text x="20" y="54" font-size="11.5" fill="#6D7C86">Hacienda Chada: Huelquén · temporada 2028-2029, plena producción · 292,23 ha modeladas</text>
+<rect x="20" y="64" width="9" height="9" rx="2" fill="#2a78d6"/>
+<text x="34" y="72.5" font-size="10.5" fill="#6D7C86">Aporta</text>
+<rect x="88" y="64" width="9" height="9" rx="2" fill="#d03b3b"/>
+<text x="102" y="72.5" font-size="10.5" fill="#6D7C86">Resta</text>
+<text x="742" y="72.5" font-size="9.5" font-weight="600" fill="#898781" text-anchor="end" letter-spacing="0.5">US$/ha</text>
+<text x="800" y="72.5" font-size="9.5" font-weight="600" fill="#898781" text-anchor="end" letter-spacing="0.5">ha</text>
+<line x1="188.0" y1="86" x2="188.0" y2="785" stroke="#e1e0d9" stroke-width="1"/>
+<text x="188.0" y="803" font-size="10" fill="#898781" text-anchor="middle">−10k</text>
+<line x1="280.0" y1="86" x2="280.0" y2="785" stroke="#e1e0d9" stroke-width="1"/>
+<text x="280.0" y="803" font-size="10" fill="#898781" text-anchor="middle">−5k</text>
+<line x1="372.0" y1="86" x2="372.0" y2="785" stroke="#e1e0d9" stroke-width="1"/>
+<text x="372.0" y="803" font-size="10" fill="#898781" text-anchor="middle">0k</text>
+<line x1="464.0" y1="86" x2="464.0" y2="785" stroke="#e1e0d9" stroke-width="1"/>
+<text x="464.0" y="803" font-size="10" fill="#898781" text-anchor="middle">5k</text>
+<line x1="556.0" y1="86" x2="556.0" y2="785" stroke="#e1e0d9" stroke-width="1"/>
+<text x="556.0" y="803" font-size="10" fill="#898781" text-anchor="middle">10k</text>
+<line x1="648.0" y1="86" x2="648.0" y2="785" stroke="#e1e0d9" stroke-width="1"/>
+<text x="648.0" y="803" font-size="10" fill="#898781" text-anchor="middle">15k</text>
+<rect x="372.0" y="96.0" width="240.8" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="106.3" font-size="11" fill="#1A2733">Sweet Mary</text>
+<text x="742" y="106.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">13.090</text>
+<text x="800" y="106.3" font-size="10.5" fill="#898781" text-anchor="end">4,3</text>
+<rect x="372.0" y="117.0" width="208.2" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="127.3" font-size="11" fill="#1A2733">Hass</text>
+<text x="742" y="127.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">11.315</text>
+<text x="800" y="127.3" font-size="10.5" fill="#898781" text-anchor="end">2,8</text>
+<rect x="372.0" y="138.0" width="207.4" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="148.3" font-size="11" fill="#1A2733">Red Phoenix</text>
+<text x="742" y="148.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">11.274</text>
+<text x="800" y="148.3" font-size="10.5" fill="#898781" text-anchor="end">4,2</text>
+<rect x="372.0" y="159.0" width="171.5" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="169.3" font-size="11" fill="#1A2733">Autumn Crisp</text>
+<text x="742" y="169.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">9.320</text>
+<text x="800" y="169.3" font-size="10.5" fill="#898781" text-anchor="end">38,1</text>
+<rect x="372.0" y="180.0" width="142.7" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="190.3" font-size="11" fill="#1A2733">Red Globe</text>
+<text x="742" y="190.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">7.758</text>
+<text x="800" y="190.3" font-size="10.5" fill="#898781" text-anchor="end">2,9</text>
+<rect x="372.0" y="201.0" width="130.7" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="211.3" font-size="11" fill="#1A2733">Sweet Favors</text>
+<text x="742" y="211.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">7.101</text>
+<text x="800" y="211.3" font-size="10.5" fill="#898781" text-anchor="end">1,4</text>
+<rect x="372.0" y="222.0" width="129.8" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="232.3" font-size="11" fill="#1A2733">Ivory</text>
+<text x="742" y="232.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">7.052</text>
+<text x="800" y="232.3" font-size="10.5" fill="#898781" text-anchor="end">3,6</text>
+<rect x="372.0" y="243.0" width="111.9" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="253.3" font-size="11" fill="#1A2733">Lapins</text>
+<text x="742" y="253.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">6.079</text>
+<text x="800" y="253.3" font-size="10.5" fill="#898781" text-anchor="end">20,5</text>
+<rect x="372.0" y="264.0" width="111.9" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="274.3" font-size="11" fill="#1A2733">Lapins Injerto</text>
+<text x="742" y="274.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">6.079</text>
+<text x="800" y="274.3" font-size="10.5" fill="#898781" text-anchor="end">0,5</text>
+<rect x="372.0" y="285.0" width="94.5" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="295.3" font-size="11" fill="#1A2733">Santina Macro Túnel</text>
+<text x="742" y="295.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">5.137</text>
+<text x="800" y="295.3" font-size="10.5" fill="#898781" text-anchor="end">7,7</text>
+<rect x="372.0" y="306.0" width="72.3" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="316.3" font-size="11" fill="#1A2733">Fukumoto</text>
+<text x="742" y="316.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">3.932</text>
+<text x="800" y="316.3" font-size="10.5" fill="#898781" text-anchor="end">1,1</text>
+<rect x="372.0" y="327.0" width="66.7" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="337.3" font-size="11" fill="#1A2733">Candy Red</text>
+<text x="742" y="337.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">3.624</text>
+<text x="800" y="337.3" font-size="10.5" fill="#898781" text-anchor="end">4,3</text>
+<rect x="372.0" y="348.0" width="52.7" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="358.3" font-size="11" fill="#1A2733">Cotton Candy</text>
+<text x="742" y="358.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">2.863</text>
+<text x="800" y="358.3" font-size="10.5" fill="#898781" text-anchor="end">19,4</text>
+<rect x="372.0" y="369.0" width="49.0" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="379.3" font-size="11" fill="#1A2733">Timpson</text>
+<text x="742" y="379.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">2.664</text>
+<text x="800" y="379.3" font-size="10.5" fill="#898781" text-anchor="end">16,3</text>
+<rect x="372.0" y="390.0" width="36.1" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="400.3" font-size="11" fill="#1A2733">Sweet Celebration</text>
+<text x="742" y="400.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">1.964</text>
+<text x="800" y="400.3" font-size="10.5" fill="#898781" text-anchor="end">23,1</text>
+<rect x="372.0" y="411.0" width="35.6" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="421.3" font-size="11" fill="#1A2733">Cheery Treat Injerto.</text>
+<text x="742" y="421.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">1.937</text>
+<text x="800" y="421.3" font-size="10.5" fill="#898781" text-anchor="end">2,1</text>
+<rect x="372.0" y="432.0" width="35.6" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="442.3" font-size="11" fill="#1A2733">Cheery Treat</text>
+<text x="742" y="442.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">1.937</text>
+<text x="800" y="442.3" font-size="10.5" fill="#898781" text-anchor="end">2,0</text>
+<rect x="372.0" y="453.0" width="35.6" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="463.3" font-size="11" fill="#1A2733">Cheery Glow</text>
+<text x="742" y="463.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">1.937</text>
+<text x="800" y="463.3" font-size="10.5" fill="#898781" text-anchor="end">1,1</text>
+<rect x="372.0" y="474.0" width="35.1" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="484.3" font-size="11" fill="#1A2733">Octubrina</text>
+<text x="742" y="484.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">1.905</text>
+<text x="800" y="484.3" font-size="10.5" fill="#898781" text-anchor="end">1,1</text>
+<rect x="372.0" y="495.0" width="6.3" height="13" rx="2.5" fill="#2a78d6"/>
+<text x="20" y="505.3" font-size="11" fill="#1A2733">Sweet Globe</text>
+<text x="742" y="505.3" font-size="11" fill="#1A2733" text-anchor="end" font-weight="500">343</text>
+<text x="800" y="505.3" font-size="10.5" fill="#898781" text-anchor="end">36,1</text>
+<rect x="365.6" y="516.0" width="6.4" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="526.3" font-size="11" fill="#1A2733">Santina</text>
+<text x="742" y="526.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−347</text>
+<text x="800" y="526.3" font-size="10.5" fill="#898781" text-anchor="end">12,2</text>
+<rect x="359.0" y="537.0" width="13.0" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="547.3" font-size="11" fill="#1A2733">Cara Cara</text>
+<text x="742" y="547.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−705</text>
+<text x="800" y="547.3" font-size="10.5" fill="#898781" text-anchor="end">1,4</text>
+<rect x="354.4" y="558.0" width="17.6" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="568.3" font-size="11" fill="#1A2733">Candy Hearts</text>
+<text x="742" y="568.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−957</text>
+<text x="800" y="568.3" font-size="10.5" fill="#898781" text-anchor="end">16,3</text>
+<rect x="350.8" y="579.0" width="21.2" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="589.3" font-size="11" fill="#1A2733">Krissy</text>
+<text x="742" y="589.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−1.152</text>
+<text x="800" y="589.3" font-size="10.5" fill="#898781" text-anchor="end">7,9</text>
+<rect x="338.0" y="600.0" width="34.0" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="610.3" font-size="11" fill="#1A2733">Sweet Aryana</text>
+<text x="742" y="610.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−1.847</text>
+<text x="800" y="610.3" font-size="10.5" fill="#898781" text-anchor="end">2,7</text>
+<rect x="338.0" y="621.0" width="34.0" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="631.3" font-size="11" fill="#1A2733">Pacific Red</text>
+<text x="742" y="631.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−1.847</text>
+<text x="800" y="631.3" font-size="10.5" fill="#898781" text-anchor="end">0,4</text>
+<rect x="305.7" y="642.0" width="66.3" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="652.3" font-size="11" fill="#1A2733">Petit Verdot</text>
+<text x="742" y="652.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−3.605</text>
+<text x="800" y="652.3" font-size="10.5" fill="#898781" text-anchor="end">3,1</text>
+<rect x="301.9" y="663.0" width="70.1" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="673.3" font-size="11" fill="#1A2733">Cabernet Franc</text>
+<text x="742" y="673.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−3.808</text>
+<text x="800" y="673.3" font-size="10.5" fill="#898781" text-anchor="end">3,5</text>
+<rect x="301.4" y="684.0" width="70.6" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="694.3" font-size="11" fill="#1A2733">Carmenere</text>
+<text x="742" y="694.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−3.836</text>
+<text x="800" y="694.3" font-size="10.5" fill="#898781" text-anchor="end">0,5</text>
+<rect x="294.3" y="705.0" width="77.7" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="715.3" font-size="11" fill="#1A2733">Cabernet Sauvignon</text>
+<text x="742" y="715.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−4.221</text>
+<text x="800" y="715.3" font-size="10.5" fill="#898781" text-anchor="end">38,0</text>
+<rect x="281.2" y="726.0" width="90.8" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="736.3" font-size="11" fill="#1A2733">Royal Dawn</text>
+<text x="742" y="736.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−4.934</text>
+<text x="800" y="736.3" font-size="10.5" fill="#898781" text-anchor="end">7,9</text>
+<rect x="273.2" y="747.0" width="98.8" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="757.3" font-size="11" fill="#1A2733">Nimba</text>
+<text x="742" y="757.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−5.368</text>
+<text x="800" y="757.3" font-size="10.5" fill="#898781" text-anchor="end">1,4</text>
+<rect x="228.2" y="768.0" width="143.8" height="13" rx="2.5" fill="#d03b3b"/>
+<text x="20" y="778.3" font-size="11" fill="#1A2733">Candy Dreams</text>
+<text x="742" y="778.3" font-size="11" fill="#d03b3b" text-anchor="end" font-weight="500">−7.812</text>
+<text x="800" y="778.3" font-size="10.5" fill="#898781" text-anchor="end">4,1</text>
+<line x1="372.0" y1="86" x2="372.0" y2="785" stroke="#1A2733" stroke-width="1.5"/>
+<line x1="410.1" y1="86" x2="410.1" y2="785" stroke="#6D7C86" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="410.1" y="80" font-size="10" fill="#6D7C86" text-anchor="middle">promedio 2.072</text>
+<line x1="188" y1="785" x2="648" y2="785" stroke="#c3c2b7" stroke-width="1"/>
+<text x="20" y="827" font-size="10" fill="#898781">Fuente: Financial_Model_Hacienda_Chada_v1.xlsx · EBITDA sobre superficie modelada de cada variedad. El color indica sólo el signo; el largo, la magnitud.</text>
+</svg>
