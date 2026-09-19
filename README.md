@@ -7,7 +7,8 @@ y el mapa de San Gerardo: los tres predios comparten producto, así que comparte
 chrome, tipografía, paleta de marca y convención de datos.
 
 Es una sola página estática. No hay build, ni dependencias instalables, ni
-backend: `index.html` pide dos JSON por `fetch` y dibuja sobre Mapbox GL.
+backend: `index.html` pide dos JSON por `fetch` y dibuja sobre Mapbox GL. Las
+capas de terreno y suelo viven dentro de `geo_data.json`.
 
 ---
 
@@ -84,9 +85,72 @@ cuarteles del fondo se aplastan y las etiquetas se amontonan).
 
 ---
 
+## Los suelos: un plano de papel, cruzado
+
+El *Plano de tipos de suelos por sectores* de Hacienda Chada S.A. es un PDF
+vectorial de una página, **sin georreferenciar**: los sectores están dibujados
+como áreas de color y la simbología describe cada color por textura y
+profundidad, en dos estratos. No trae coordenadas.
+
+El puente son los **códigos de cuartel**. El plano rotula sus paños con el mismo
+número que el KMZ en 20 casos, y con esos pares se ajusta una transformación afín
+de la hoja a lon/lat por mínimos cuadrados. El ajuste descarta los pares cuyo
+residuo se pasa de 2,5 veces la mediana —el plano es de otra época, rotula
+Thompson Seedless y Flame, y varios paños se redibujaron— y converge con **16 de
+20 puntos y un residuo mediano de 24 m** (máximo 50 m). Con eso, cada cuartel del
+KMZ se rasteriza sobre el plano y se cuenta de qué color es cada píxel adentro:
+**0,88 m/px**, los 174 cuarteles con dato.
+
+El resultado es la **mezcla** de tipos de suelo del cuartel, no una etiqueta
+única. Un cuartel puede cruzar dos sectores, y decir lo contrario sería inventar
+precisión: 2 cuarteles (`5144` y `5165-B`) quedan sin tipo dominante y su ficha
+lo dice.
+
+### El cruce se valida solo
+
+La pendiente y la especie **no** entran en la clasificación de suelo, así que
+sirven de control independiente. Y calzan:
+
+| Especie | Tipos de suelo | Pendiente media |
+|---|---|---:|
+| Uva vinífera (94) | S3: 66 · S1: 28 — sólo los dos arcillosos | 25,8% |
+| Uva de mesa (47) | repartida en los 10 tipos del valle | 5,1% |
+
+Los suelos arcillosos del plano caen enteros sobre el cerro, y los francos y
+limosos sobre el plano del valle. Nada de eso se le dijo al algoritmo.
+
+| Tipo | Descripción | Cuarteles | Pendiente media |
+|---|---|---:|---:|
+| S3 | 0-30 franco arcilloso; 30-150 arcilloso con escasas piedras | 81 | 22,7% |
+| S1 | 0-20 franco arcilloso; 20-150 arcilloso | 33 | 22,8% |
+| S4 | 0-30 franco arcilloso; 30-150 arcilloso con piedras angulares | 13 | 8,5% |
+| S8 | 0-25 franco; 20-70 franco arcilloso | 11 | 3,6% |
+| S2 | 0-20 franco arcilloso; 20-150 arcilloso con piedras angulares | 9 | 14,0% |
+| S9 | 0-40 franco; 40-160 franco arcilloso e incrustaciones | 9 | 2,9% |
+| S6 | 0-70 franco limoso; 70-150 arenoso arcilloso | 7 | 3,3% |
+| S5 | 0-40 franco arcilloso; 40-150 contrastes de piedra | 4 | 3,0% |
+| S10 | 0-50 franco; 50-160 franco arcilloso | 4 | 3,4% |
+| S7 | 0-50 franco arcilloso; 50-150 con presencia de piedras | 3 | 4,0% |
+
+### Lo que el plano no es
+
+**No es un análisis físico de laboratorio.** La simbología describe textura y
+profundidad por estratos, que es información de calicata leída a ojo. No hay
+densidad aparente, ni retención de humedad, ni velocidad de infiltración, ni
+granulometría, ni pH, ni materia orgánica. Si aparece el estudio de suelos con
+las calicatas, se cruza por cuartel igual que todo lo demás.
+
+En el mapa, el modo **Suelos** usa **los colores del plano original**, no una
+paleta nuestra: quien conoce el papel reconoce el mapa. Esa paleta viene heredada
+del documento y no pasó por el validador; la reserva es la misma de siempre —
+leyenda con el nombre al lado del color, ficha con la descripción completa,
+etiqueta de cuartel y filtro por rama.
+
+---
+
 ## Qué muestra
 
-Cuatro modos, con la misma leyenda-árbol para encender y apagar cualquier rama.
+Cinco modos, con la misma leyenda-árbol para encender y apagar cualquier rama.
 
 **Vista general** — identidad. Colorea por especie (siete tonos) o por variedad
 (el tono de su especie, escalonado en luminosidad). El mapa se lee primero por
@@ -100,6 +164,9 @@ cero, azul sobre cero.
 
 **Terreno** — pendiente o elevación, desde el DEM. Sin selector de temporada: el
 cerro no cambia entre 2025 y 2046.
+
+**Suelos** — tipo de suelo, con la simbología del plano, o profundidad del primer
+horizonte en una rampa ordinal propia.
 
 En Producción y Financiero se abre el panel **Modelo**, con:
 
@@ -160,23 +227,26 @@ Hacienda Chada Huelquen.kmz     Fuente geográfica.
 tools/kml_to_geojson.py         KMZ → geo_data.json.
 tools/modelo_to_json.py         Modelo financiero → modelo_data.json (y cruce al KMZ).
 tools/terreno_to_json.py        DEM de Mapbox → pendiente, exposición y elevación por cuartel.
-datos_fuente/                   El .xlsx del modelo. Ignorado por git.
+tools/suelos_to_json.py         Plano de suelos (PDF) → tipo de suelo por cuartel.
+datos_fuente/                   El .xlsx del modelo y el PDF del plano. Ignorado por git.
 ```
 
 ### Regenerar
 
 El orden importa. `kml_to_geojson.py` reescribe `geo_data.json` desde cero, y los
-otros dos le agregan encima: `modelo_to_json.py` el cruce de cada cuartel contra
-el modelo, y `terreno_to_json.py` la pendiente, la exposición y la elevación.
-Correr el primero sin los otros dos deja el mapa sin esas capas.
+otros tres le agregan encima: `modelo_to_json.py` el cruce de cada cuartel contra
+el modelo, `terreno_to_json.py` la pendiente, la exposición y la elevación, y
+`suelos_to_json.py` el tipo de suelo. Correr el primero solo deja el mapa sin
+esas capas.
 
 ```bash
-python tools/kml_to_geojson.py && python tools/modelo_to_json.py && python tools/terreno_to_json.py
+python tools/kml_to_geojson.py && python tools/modelo_to_json.py && python tools/terreno_to_json.py && python tools/suelos_to_json.py
 ```
 
 `kml_to_geojson.py` sólo usa stdlib. `modelo_to_json.py` necesita `openpyxl`;
 `terreno_to_json.py` necesita `numpy`, `Pillow` y `requests`, y toma el token de
 Mapbox de `MAPBOX_TOKEN` o, si no está, del propio `index.html`.
+`suelos_to_json.py` necesita `numpy`, `Pillow` y `pdfplumber`.
 
 El libro trae 8.338 nombres definidos y al menos uno apunta a `#N/A`, lo que hace
 que openpyxl se niegue a abrirlo; el script reescribe una copia sin el bloque

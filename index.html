@@ -103,6 +103,11 @@
     --pen-1: #aaa6ff; --pen-2: #948eff; --pen-3: #7f77ea;
     --pen-4: #6b61d1; --pen-5: #584bb9; --pen-6: #4634a1;
     --ele-1: #eba000; --ele-2: #d18700; --ele-3: #b57000; --ele-4: #975c00; --ele-5: #784900;
+    /* Profundidad del primer horizonte. Rampa ordinal propia; los colores de
+       TIPO de suelo no se declaran aquí porque no son nuestros: son los del
+       plano original y vienen en geo_data.json con su simbología. */
+    --pro-1: #3dc48e; --pro-2: #16ad78; --pro-3: #009663;
+    --pro-4: #00804f; --pro-5: #00693e; --pro-6: #00522e;
 
     /* Chrome del gráfico (tokens de dato, no de marca) */
     --viz-grid:   #e1e0d9;
@@ -306,6 +311,12 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .escala-ticks { display:flex; justify-content:space-between; margin-top:3px; font-size:9px; color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
 .escala-nd { display:flex; align-items:center; gap:6px; margin-top:7px; font-size:9.5px; color:var(--sem-text-2); }
 .escala-nd i { width:10px; height:10px; border-radius:2px; border:1px solid rgba(26,39,51,0.18); }
+/* Leyenda categórica de suelos: hasta diez filas, con scroll propio para no
+   empujar el árbol de especies fuera del panel. */
+.escala-lista { max-height:150px; overflow-y:auto; scrollbar-width:thin; margin-top:2px; }
+.escala-fila { display:flex; align-items:center; gap:6px; padding:2px 0; font-size:10px; }
+.escala-nom { flex:1; color:var(--sem-ink); line-height:1.25; }
+.escala-n { color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
 
 /* ── COMPONENTE 6 · Ficha del cuartel ───────────────────────────────────── */
 .card {
@@ -344,6 +355,7 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .card-chip { display:flex; justify-content:space-between; gap:8px; font-size:10.5px; padding:2px 6px; background:var(--sem-slate-wash); border-radius:var(--sem-radius); }
 .card-chip span:first-child { color:var(--sem-ink); }
 .card-chip span:last-child { color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
+.card-suelo-desc { font-size:10px; color:var(--sem-text-2); line-height:1.4; padding:2px 0 1px; }
 .card-nota { font-size:10.5px; color:var(--sem-navy); background:var(--sem-navy-wash); padding:3px 7px; border-radius:var(--sem-radius); align-self:flex-start; }
 .card-alerta { font-size:10px; color:var(--neg-4); background:#fdeceb; padding:4px 7px; border-radius:var(--sem-radius); line-height:1.35; }
 .card-hint { border-top:var(--sem-border-soft); padding-top:6px; margin-top:1px; font-size:9.5px; color:var(--sem-text-3); }
@@ -475,6 +487,8 @@ body.panel-abierto .data-stamp { right:408px; }
         <path d="M4.5 2.5h9v13h-9v-13Z"/><path d="M7 5.5h4M7 8.5h4M7 11.5h2.5"/></g>
     <g id="ic-cerro" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
         <path d="M1.5 14.5 6.5 5l3.2 5.6"/><path d="M7.7 14.5 12 6.8l4.5 7.7Z"/><path d="M1.5 14.5h15"/></g>
+    <g id="ic-suelo" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M2 5.5h14"/><path d="M2 9h14"/><path d="M2 13h14"/><path d="M2 5.5v9h14v-9"/></g>
 </defs></svg>
 
 <div class="tabs" id="tabs">
@@ -482,6 +496,7 @@ body.panel-abierto .data-stamp { right:408px; }
     <button class="tab-btn" data-modo="produccion" title="Rendimiento por hectárea según el modelo"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-barras"/></svg></span><span>Producción</span></button>
     <button class="tab-btn" data-modo="financiero" title="EBITDA, ingresos y costos por hectárea"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-billete"/></svg></span><span>Financiero</span></button>
     <button class="tab-btn" data-modo="terreno" title="Pendiente y elevación desde el modelo de elevación"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-cerro"/></svg></span><span>Terreno</span></button>
+    <button class="tab-btn" data-modo="suelos" title="Tipos de suelo del plano de la hacienda"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-suelo"/></svg></span><span>Suelos</span></button>
 </div>
 
 <div class="controls">
@@ -499,6 +514,10 @@ body.panel-abierto .data-stamp { right:408px; }
     <div class="fc-group" id="grpTerreno" hidden>
         <label class="fc-label" for="selTerreno">Variable</label>
         <select class="fc-select" id="selTerreno"></select>
+    </div>
+    <div class="fc-group" id="grpSuelo" hidden>
+        <label class="fc-label" for="selSuelo">Variable</label>
+        <select class="fc-select" id="selSuelo"></select>
     </div>
     <div class="fc-group" id="grpTemporada" hidden>
         <label class="fc-label" for="selTemporada">Temporada</label>
@@ -731,10 +750,22 @@ const ESCALAS = {
         cortes: [430, 470, 520, 570],
         tokens: ['--ele-1', '--ele-2', '--ele-3', '--ele-4', '--ele-5'],
         fmt: x => miles(x) + ' m'
+    },
+    /* Los cortes caen entre los valores que usa la simbología (20, 25, 30, 40,
+       50 y 70 cm), así que cada paso es una clase del plano y no un intervalo
+       inventado. */
+    suelo_prof: {
+        etiqueta: 'Profundidad 1er horizonte', titulo: 'Profundidad del primer horizonte',
+        unidad: 'cm de suelo antes del cambio de textura', tipo: 'suelo',
+        cortes: [22, 27, 35, 45, 60],
+        tokens: ['--pro-1', '--pro-2', '--pro-3', '--pro-4', '--pro-5', '--pro-6'],
+        fmt: x => miles(x) + ' cm'
     }
 };
 const METRICAS_FIN = ['ebitda_ha', 'ingreso_ha', 'costo_ha', 'margen'];
 const METRICAS_TERRENO = ['pendiente', 'elev'];
+/* "clase" no es una escala: es la simbología del plano tal cual. */
+const METRICAS_SUELO = ['clase', 'suelo_prof'];
 
 /* ── Estado ─────────────────────────────────────────────────────────────── */
 let GEO = null, MOD = null;
@@ -744,17 +775,33 @@ let COLOR_ESPECIE = {};        // especie del KMZ -> hex
 let COLOR_VARIEDAD = {};       // vkey del KMZ    -> hex
 let HA_ESPECIE = {}, HA_VKEY = {};   // hectáreas del modelo, agregadas al KMZ
 const visibles = new Set();
-let modo = 'general', modoColor = 'variedad', metrica = 'ebitda_ha', metricaTerreno = 'pendiente', t = 3;
+let modo = 'general', modoColor = 'variedad', metrica = 'ebitda_ha', metricaTerreno = 'pendiente', metricaSuelo = 'clase', t = 3;
+let SUELO = {};                // clase -> entrada de la simbología del plano
 let vistaGrafico = 'serie', ordenTabla = { campo: 'ebitda_ha', asc: false };
 let fijado = null, hoverId = null, estiloSatelital = true, grafico = null, relieve = false;
 
 const escalaActiva = () => modo === 'produccion' ? ESCALAS.rend_kg_ha
-    : modo === 'terreno' ? ESCALAS[metricaTerreno] : ESCALAS[metrica];
+    : modo === 'terreno' ? ESCALAS[metricaTerreno]
+    : modo === 'suelos' ? ESCALAS[metricaSuelo] : ESCALAS[metrica];
 
-/* El terreno no viene del modelo sino del DEM, y va escrito en el propio
-   cuartel: no se pondera ni se cruza con nada. */
+/* El terreno viene del DEM y el suelo del plano: los dos van escritos en el
+   propio cuartel y no se ponderan ni se cruzan con el modelo. */
 const valorPintado = p => modo === 'terreno' ? (p[metricaTerreno] ?? null)
+    : modo === 'suelos' ? ((obj(p.suelo) || {}).prof_cm ?? null)
     : valorCuartel(p, modo === 'produccion' ? 'rend_kg_ha' : metrica, t);
+
+/* El color de un cuartel: identidad, simbología del plano o clase de escala. */
+function colorCuartel(p) {
+    if (modo === 'general') {
+        return (modoColor === 'especie' ? COLOR_ESPECIE[p.especie]
+            : COLOR_VARIEDAD[vkey(p.especie, p.variedad)]) || css('--dat-sindato');
+    }
+    if (modo === 'suelos' && metricaSuelo === 'clase') {
+        const s = obj(p.suelo);
+        return s && SUELO[s.clase] ? SUELO[s.clase].color : css('--dat-sindato');
+    }
+    return colorEscala(valorPintado(p), escalaActiva());
+}
 
 /* ── Mapa ───────────────────────────────────────────────────────────────── */
 const map = new mapboxgl.Map({
@@ -771,6 +818,7 @@ Promise.all([
 ]).then(([geo, mod]) => {
     GEO = geo; MOD = mod;
     MOD.variedades.forEach(v => { MIDX[vkey(v.especie, v.variedad)] = v; });
+    (GEO.suelos ? GEO.suelos.simbologia : []).forEach(s => { SUELO[s.clase] = s; });
     t = Math.min(3, MOD.temporadas.length - 1);
     prepararPaletas();
     construirSelectores();
@@ -865,19 +913,7 @@ function colorEscala(valor, escala) {
 /* ── Capas ──────────────────────────────────────────────────────────────── */
 function exprColor() {
     const pares = [];
-    if (modo === 'general') {
-        const tabla = modoColor === 'especie' ? null : COLOR_VARIEDAD;
-        GEO.cuarteles.features.forEach(f => {
-            const p = f.properties;
-            pares.push(p.uid, tabla ? (tabla[vkey(p.especie, p.variedad)] || css('--dat-sindato'))
-                                    : (COLOR_ESPECIE[p.especie] || css('--dat-sindato')));
-        });
-    } else {
-        const escala = escalaActiva();
-        GEO.cuarteles.features.forEach(f => {
-            pares.push(f.properties.uid, colorEscala(valorPintado(f.properties), escala));
-        });
-    }
+    GEO.cuarteles.features.forEach(f => pares.push(f.properties.uid, colorCuartel(f.properties)));
     return ['match', ['get', 'uid'], ...pares, css('--dat-sindato')];
 }
 
@@ -1020,13 +1056,12 @@ function desfijar() { setEstado(fijado, 'fijo', false); fijado = null; ocultarFi
 
 /* Mapbox serializa los arreglos de properties a string. */
 const arr = v => { try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch (_) { return []; } };
+const obj = v => { try { return typeof v === 'string' ? JSON.parse(v) : (v || null); } catch (_) { return null; } };
 
 function mostrarFicha(p, punto, fija = false) {
     const card = $('card');
     const variedades = arr(p.variedades), cuarteles = arr(p.cuarteles), claves = arr(p.modelo);
-    const color = modo !== 'general'
-        ? colorEscala(valorCuartel(p, modo === 'produccion' ? 'rend_kg_ha' : metrica, t), escalaActiva())
-        : (modoColor === 'especie' ? COLOR_ESPECIE[p.especie] : COLOR_VARIEDAD[vkey(p.especie, p.variedad)]) || css('--dat-sindato');
+    const color = colorCuartel(p);
 
     const regs = claves.map(k => MIDX[k]).filter(Boolean);
     const haModelo = regs.reduce((a, v) => a + v.ha, 0);
@@ -1048,6 +1083,20 @@ function mostrarFicha(p, punto, fija = false) {
                 <div class="card-kv"><span class="card-k">Margen</span><span class="card-v${signo(mg)}">${pct(mg)}</span></div>
             </div>`;
     }
+
+    const su = obj(p.suelo);
+    const bloqueSuelo = !su ? '' : `
+        <div class="card-sec">
+            <div class="card-sec-tit">Suelo</div>
+            <div class="card-kv"><span class="card-k">Tipo</span><span class="card-v">${esc((SUELO[su.clase] || {}).nombre || su.clase)}</span></div>
+            <div class="card-kv"><span class="card-k">Textura superficial</span><span class="card-v">${esc(su.textura)}</span></div>
+            <div class="card-kv"><span class="card-k">1er horizonte</span><span class="card-v">${miles(su.prof_cm)} cm</span></div>
+            <div class="card-kv"><span class="card-k">Pedregosidad</span><span class="card-v">${esc(su.pedregosidad)}</span></div>
+            <div class="card-suelo-desc">${esc(su.descripcion)}</div>
+            ${su.mezcla && su.mezcla.length > 1 ? `<div class="card-sec-tit" style="margin-top:3px">Mezcla del cuartel</div>` +
+                su.mezcla.filter(m => m.pct >= 0.02).map(m =>
+                    `<div class="card-chip"><span><i class="lg-dot" style="display:inline-block;vertical-align:-1px;margin-right:5px;background:${(SUELO[m.clase] || {}).color}"></i>${esc((SUELO[m.clase] || {}).nombre || m.clase)}</span><span>${pct(m.pct)}</span></div>`).join('') : ''}
+        </div>`;
 
     const bloqueTerreno = p.pendiente == null ? '' : `
         <div class="card-sec">
@@ -1085,6 +1134,7 @@ function mostrarFicha(p, punto, fija = false) {
     const alertas = [];
     if (!regs.length) alertas.push('Sin contraparte en el modelo financiero: el KMZ lo agrupa como <b>Disponible</b> (arrancado o no productivo). Es parte de las 311,65 ha de tasación, no de las 292,23 ha modeladas.');
     if (p.aprox) alertas.push('Cruce aproximado con el modelo: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
+    if (su && su.pct < 0.6) alertas.push('El cuartel cruza dos sectores de suelo sin que ninguno mande: la mezcla de arriba es la lectura buena, no el tipo dominante.');
     if (regs.some(v => v.produccion_libro)) alertas.push('La producción de esta variedad se despejó desde los ingresos: el bloque PRODUCCIÓN del libro trae corridas las filas de Uva Vinífera. Ingresos, costos y EBITDA no están afectados.');
 
     card.innerHTML = `
@@ -1097,7 +1147,9 @@ function mostrarFicha(p, punto, fija = false) {
         <div class="card-body">
             ${regs.length ? `<div class="card-kv"><span class="card-k">Superficie del modelo</span><span class="card-v">${nf(haModelo, 2)} ha</span></div>` : ''}
             ${p.nota ? `<div class="card-nota">${esc(p.nota)}</div>` : ''}
-            ${modo === 'terreno' ? bloqueTerreno + bloqueModelo : bloqueModelo + bloqueTerreno}
+            ${modo === 'suelos' ? bloqueSuelo + bloqueTerreno + bloqueModelo
+              : modo === 'terreno' ? bloqueTerreno + bloqueSuelo + bloqueModelo
+              : bloqueModelo + bloqueTerreno + bloqueSuelo}
             ${bloqueVariedades}
             ${variedades.length > 1 ? `<div class="card-sec"><div class="card-sec-tit">Detalle del cuartel mixto</div>${
                 variedades.map((v, i) => `<div class="card-chip"><span>${esc(v)}</span><span>${esc(cuarteles[i] || '—')}</span></div>`).join('')}</div>` : ''}
@@ -1206,13 +1258,38 @@ function pintarLeyenda() {
 function pintarEscala() {
     const caja = $('escala');
     if (modo === 'general') { caja.hidden = true; return; }
+
+    // El tipo de suelo no es una escala continua: es la simbología del plano,
+    // categórica, y se lista con su descripción. Los colores son los del plano
+    // original, no una paleta nuestra: el que conoce el papel reconoce el mapa.
+    if (modo === 'suelos' && metricaSuelo === 'clase') {
+        const usados = {};
+        GEO.cuarteles.features.forEach(f => {
+            const s = f.properties.suelo;
+            if (s && visibles.has(vkey(f.properties.especie, f.properties.variedad)))
+                usados[s.clase] = (usados[s.clase] || 0) + 1;
+        });
+        caja.hidden = false;
+        caja.innerHTML = `
+            <div class="escala-tit">Tipos de suelo</div>
+            <div class="escala-sub">Simbología del plano de la hacienda</div>
+            <div class="escala-lista">${GEO.suelos.simbologia.filter(s => usados[s.clase]).map(s => `
+                <div class="escala-fila" title="${esc(s.descripcion)}">
+                    <i class="lg-dot" style="background:${s.color}"></i>
+                    <span class="escala-nom">${esc(s.nombre)}</span>
+                    <span class="escala-n">${usados[s.clase]}</span>
+                </div>`).join('')}</div>`;
+        return;
+    }
     const e = escalaActiva();
     const ticks = e.cortes.map(c => e.fmt === pct ? pct(c) : (Math.abs(c) >= 1000 ? Math.round(c / 1000) + 'k' : String(c)));
     caja.hidden = false;
     caja.innerHTML = `
         <div class="escala-tit">${esc(e.titulo)}</div>
         <div class="escala-sub">${esc(e.unidad)}${e.tipo === 'terreno'
-            ? ' · DEM ' + esc(GEO.terreno.fuente) : ' · ' + esc(MOD.temporadas[t])}</div>
+            ? ' · DEM ' + esc(GEO.terreno.fuente)
+            : e.tipo === 'suelo' ? ' · plano de la hacienda'
+            : ' · ' + esc(MOD.temporadas[t])}</div>
         <div class="escala-barra">${e.tokens.map(tk => `<i style="background:${css(tk)}"></i>`).join('')}</div>
         <div class="escala-ticks">${ticks.map(x => `<span>${esc(x)}</span>`).join('')}</div>
         <div class="escala-nd"><i style="background:${css('--dat-sindato')}"></i>Sin contraparte en el modelo</div>`;
@@ -1267,6 +1344,19 @@ function pintarMetricas() {
             <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">Hectáreas${parcial}</span></div>
             <div class="stat"><span class="stat-val">${cuarteles}</span><span class="stat-lbl">${plural(cuarteles, 'Cuartel', 'Cuarteles')}</span></div>
             <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
+        return;
+    }
+    if (modo === 'suelos') {
+        const conSuelo = GEO.cuarteles.features.map(f => f.properties)
+            .filter(p => visibles.has(vkey(p.especie, p.variedad)) && p.suelo);
+        const tipos = new Set(conSuelo.map(p => p.suelo.clase));
+        const prof = conSuelo.length ? conSuelo.reduce((a, p) => a + p.suelo.prof_cm, 0) / conSuelo.length : null;
+        const someros = conSuelo.filter(p => p.suelo.prof_cm <= 25).length;
+        $('statsBar').innerHTML = `
+            <div class="stat"><span class="stat-val">${tipos.size}</span><span class="stat-lbl">${plural(tipos.size, 'Tipo de suelo', 'Tipos de suelo')}</span></div>
+            <div class="stat"><span class="stat-val">${nf(prof, 0)}</span><span class="stat-lbl">cm 1er horizonte</span></div>
+            <div class="stat"><span class="stat-val">${someros}</span><span class="stat-lbl">Cuarteles ≤ 25 cm</span></div>
+            <div class="stat"><span class="stat-val">${conSuelo.length}</span><span class="stat-lbl">${plural(conSuelo.length, 'Cuartel', 'Cuarteles')}</span></div>`;
         return;
     }
     if (modo === 'terreno') {
@@ -1507,6 +1597,9 @@ function construirSelectores() {
         `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`).join('');
     $('selTerreno').innerHTML = METRICAS_TERRENO.map(m =>
         `<option value="${m}"${m === metricaTerreno ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`).join('');
+    $('selSuelo').innerHTML = METRICAS_SUELO.map(m =>
+        `<option value="${m}"${m === metricaSuelo ? ' selected' : ''}>${
+            esc(m === 'clase' ? 'Tipo de suelo' : ESCALAS[m].etiqueta)}</option>`).join('');
 }
 
 function cambiarModo(nuevo) {
@@ -1516,9 +1609,10 @@ function cambiarModo(nuevo) {
     $('grpColor').hidden = modo !== 'general';
     $('grpMetrica').hidden = modo !== 'financiero';
     $('grpTerreno').hidden = modo !== 'terreno';
+    $('grpSuelo').hidden = modo !== 'suelos';
     // El terreno no cambia con la temporada: el selector sobraría y sugeriría
     // que la pendiente se mueve entre 2025 y 2046.
-    $('grpTemporada').hidden = modo === 'general' || modo === 'terreno';
+    $('grpTemporada').hidden = modo === 'general' || modo === 'terreno' || modo === 'suelos';
     if ((modo === 'produccion' || modo === 'financiero') && !document.body.classList.contains('panel-abierto')) togglePanel(true);
     repintar();
 }
@@ -1534,6 +1628,7 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 $('selColor').addEventListener('change', e => { modoColor = e.target.value; repintar(); });
 $('selMetrica').addEventListener('change', e => { metrica = e.target.value; repintar(); });
 $('selTerreno').addEventListener('change', e => { metricaTerreno = e.target.value; repintar(); });
+$('selSuelo').addEventListener('change', e => { metricaSuelo = e.target.value; repintar(); });
 $('selTemporada').addEventListener('change', e => { t = +e.target.value; repintar(); if (fijado) desfijar(); });
 $('btnPanel').addEventListener('click', () => togglePanel(!document.body.classList.contains('panel-abierto')));
 $('mpCerrar').addEventListener('click', () => togglePanel(false));
