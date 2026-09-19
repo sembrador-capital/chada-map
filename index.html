@@ -166,7 +166,7 @@ use[href^="#ic-"] { stroke:currentColor; }
 }
 body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
 .fc-group { display:flex; flex-direction:column; gap:3px; }
-.fc-group[hidden] { display:none; }
+.fc-group[hidden], .fc-btn[hidden] { display:none !important; }
 .fc-label {
     font-size:9.5px; line-height:1.2; font-weight:500; letter-spacing:0.04em;
     text-transform:uppercase; color:var(--sem-text-2);
@@ -300,6 +300,10 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .lg-vars .lg-row { padding:3px 6px; }
 .lg-vars .lg-name { font-size:11px; font-weight:400; }
 .lg-vars .lg-dot { flex:0 0 9px; width:9px; height:9px; border-radius:2px; }
+/* Rama que el modelo tiene y el KMZ no dibuja: punto hueco, porque suma en los
+   totales pero no hay polígono que pintar. */
+.lg-row.sin-poligono .lg-dot { background:transparent !important; border:1px dashed var(--sem-grey); }
+.lg-row.sin-poligono .lg-name { font-style:italic; }
 
 /* Leyenda de la escala continua: pie del panel, sólo en los modos de dato. */
 .escala { border-top:var(--sem-border-hair); padding:9px 12px 10px; }
@@ -591,7 +595,7 @@ body.panel-abierto .data-stamp { right:408px; }
             <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Gráfico</button>
             <div class="mp-sect-body">
                 <div class="mp-chart-tabs">
-                    <button type="button" class="mp-chart-tab active" data-vista="serie">Serie</button>
+                    <button type="button" class="mp-chart-tab active" data-vista="serie">Por temporada</button>
                     <button type="button" class="mp-chart-tab" data-vista="ranking" id="tabRanking">Por variedad</button>
                 </div>
                 <div class="mp-chart-wrap"><canvas id="chart"></canvas></div>
@@ -765,12 +769,15 @@ const METRICAS_SUELO = ['clase', 'suelo_prof'];
 let GEO = null, MOD = null;
 let MIDX = {};                 // clave del modelo -> registro de variedad
 let VKEY_DE_MODELO = {};       // clave del modelo -> rama del KMZ que la contiene
+let MODELOS_DE_VKEY = {};      // rama del KMZ -> claves del modelo que cuelgan de ella
+let SIN_POLIGONO = new Set();  // ramas que el modelo tiene y el KMZ no dibuja
 let COLOR_ESPECIE = {};        // especie del KMZ -> hex
 let COLOR_VARIEDAD = {};       // vkey del KMZ    -> hex
 let HA_ESPECIE = {}, HA_VKEY = {};   // hectáreas del modelo, agregadas al KMZ
 const visibles = new Set();
 let modo = 'general', modoColor = 'variedad', metrica = 'ebitda_ha', metricaTerreno = 'pendiente', metricaSuelo = 'clase', t = 3;
 let SUELO = {};                // clase -> entrada de la simbología del plano
+let UTILES = 1;                // temporadas hasta plena producción, inclusive
 let vistaGrafico = 'serie', ordenTabla = { campo: 'ebitda_ha', asc: false };
 let fijado = null, hoverId = null, estiloSatelital = true, grafico = null, relieve = false;
 
@@ -812,12 +819,21 @@ Promise.all([
 ]).then(([geo, mod]) => {
     GEO = geo; MOD = mod;
     MOD.variedades.forEach(v => { MIDX[vkey(v.especie, v.variedad)] = v; });
+    // Hasta plena producción y nada más: de ahí en adelante las diecisiete
+    // temporadas restantes repiten exactamente el mismo número, y ofrecerlas en
+    // un selector hace creer que hay algo que mirar.
+    const cambia = i => ['ingresos', 'costos', 'ebitda', 'produccion']
+        .some(c => Math.abs((MOD.totales[c][i] || 0) - (MOD.totales[c][i + 1] || 0)) > 0.5);
+    UTILES = 1;
+    for (let i = 0; i < MOD.temporadas.length - 1; i++) if (cambia(i)) UTILES = i + 2;
     (GEO.suelos ? GEO.suelos.simbologia : []).forEach(s => { SUELO[s.clase] = s; });
-    t = Math.min(3, MOD.temporadas.length - 1);
+
+    t = UTILES - 1;
     prepararPaletas();
     construirSelectores();
     construirLeyenda();
     construirDatalist();
+    sincronizarControles();
     $('dataStamp').textContent = 'KMZ ' + (GEO.generated_at || '').slice(0, 10) +
         ' · Modelo ' + (MOD.generated_at || '').slice(0, 10);
     if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
@@ -826,6 +842,8 @@ Promise.all([
 /* Las hectáreas del modelo se agregan al nivel del KMZ. Una variedad del
    modelo puede tocar varios cuarteles y un cuartel mixto varias variedades:
    se cuenta cada variedad una sola vez por rama, nunca por polígono. */
+const ESPECIE_MODELO_A_KMZ = {};
+
 function prepararPaletas() {
     const porEspecie = {};
     GEO.cuarteles.features.forEach(f => {
@@ -839,13 +857,35 @@ function prepararPaletas() {
             // el primer cuartel que la nombra fija de qué color se pinta en la
             // tabla, para que tabla y mapa no muestren dos colores distintos.
             if (!VKEY_DE_MODELO[m]) VKEY_DE_MODELO[m] = k;
+            if (!ESPECIE_MODELO_A_KMZ[m.split('|')[0]]) ESPECIE_MODELO_A_KMZ[m.split('|')[0]] = p.especie;
         });
+    });
+
+    // Red Globe y Lapins Injerto están en el modelo y no tienen polígono en el
+    // KMZ. Si se dejan fuera del árbol, el mapa encendido entero suma 288,83 ha
+    // y no las 292,23 del modelo, y ese descuadre no se explica en ninguna
+    // parte. Entran como rama propia, marcadas: cuentan en los totales y no
+    // pintan nada porque no hay qué pintar.
+    MOD.variedades.forEach(v => {
+        const clave = vkey(v.especie, v.variedad);
+        if (VKEY_DE_MODELO[clave]) return;
+        const espKmz = ESPECIE_MODELO_A_KMZ[v.especie] || v.especie;
+        const k = vkey(espKmz, v.variedad);
+        const e = porEspecie[espKmz] || (porEspecie[espKmz] = { variedades: {}, claves: new Set() });
+        (e.variedades[k] || (e.variedades[k] = { variedad: v.variedad, claves: new Set() })).claves.add(clave);
+        e.claves.add(clave);
+        VKEY_DE_MODELO[clave] = k;
+        SIN_POLIGONO.add(k);
     });
 
     const haDe = claves => [...claves].reduce((a, k) => a + ((MIDX[k] || {}).ha || 0), 0);
     Object.entries(porEspecie).forEach(([esp, e]) => {
         HA_ESPECIE[esp] = haDe(e.claves);
-        Object.entries(e.variedades).forEach(([k, v]) => { HA_VKEY[k] = haDe(v.claves); visibles.add(k); });
+        Object.entries(e.variedades).forEach(([k, v]) => {
+            HA_VKEY[k] = haDe(v.claves);
+            MODELOS_DE_VKEY[k] = [...v.claves];
+            visibles.add(k);
+        });
     });
 
     // Las ranuras se asignan en orden fijo por superficie descendente y no se
@@ -1169,25 +1209,37 @@ const ocultarFicha = () => $('card').classList.remove('visible', 'fija');
 
 /* ── Leyenda ────────────────────────────────────────────────────────────── */
 function construirLeyenda() {
+    // El árbol se arma de MODELOS_DE_VKEY, que ya incluye las ramas sin
+    // polígono; contar sólo los cuarteles dibujados dejaría fuera justamente
+    // las hectáreas que faltaban para cuadrar con el modelo.
     const porEspecie = {};
+    Object.keys(MODELOS_DE_VKEY).forEach(k => {
+        const [esp, variedad] = [k.slice(0, k.indexOf('|')), k.slice(k.indexOf('|') + 1)];
+        const e = porEspecie[esp] || (porEspecie[esp] = { cuarteles: 0, variedades: {} });
+        e.variedades[k] = { variedad, cuarteles: 0 };
+    });
     GEO.cuarteles.features.forEach(f => {
-        const p = f.properties;
-        const e = porEspecie[p.especie] || (porEspecie[p.especie] = { cuarteles: 0, variedades: {} });
+        const p = f.properties, k = vkey(p.especie, p.variedad);
+        const e = porEspecie[p.especie];
+        if (!e) return;
         e.cuarteles++;
-        const k = vkey(p.especie, p.variedad);
-        (e.variedades[k] || (e.variedades[k] = { variedad: p.variedad, cuarteles: 0 })).cuarteles++;
+        if (e.variedades[k]) e.variedades[k].cuarteles++;
     });
     const orden = Object.keys(porEspecie).sort((a, b) => (HA_ESPECIE[b] || 0) - (HA_ESPECIE[a] || 0));
 
     $('legendBody').innerHTML = orden.map(esp => {
         const e = porEspecie[esp];
         const vars = Object.entries(e.variedades).sort((a, b) => (HA_VKEY[b[0]] || 0) - (HA_VKEY[a[0]] || 0));
-        const filas = vars.map(([k, v]) => `
-            <div class="lg-row" data-vkey="${esc(k)}">
+        const filas = vars.map(([k, v]) => {
+            const huerfana = SIN_POLIGONO.has(k);
+            return `
+            <div class="lg-row${huerfana ? ' sin-poligono' : ''}" data-vkey="${esc(k)}"${
+                huerfana ? ' title="En el modelo pero sin polígono en el KMZ: suma en los totales y no se pinta"' : ''}>
                 <i class="lg-dot" style="background:${COLOR_VARIEDAD[k]}"></i>
                 <span class="lg-name">${esc(v.variedad)}</span>
                 <span class="lg-meta">${HA_VKEY[k] ? nf(HA_VKEY[k], 1) + ' ha' : '—'}</span>
-            </div>`).join('');
+            </div>`;
+        }).join('');
         return `<div class="lg-esp abierta" data-especie="${esc(esp)}">
                     <div class="lg-row lg-esp-row">
                         <span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>
@@ -1218,7 +1270,7 @@ function construirLeyenda() {
         });
     });
 
-    $('legendSub').textContent = MOD.variedades.length + ' variedades modeladas · ' + nf(MOD.totales.ha, 2) + ' ha';
+    $('legendSub').textContent = MOD.variedades.length + ' variedades · ' + nf(MOD.totales.ha, 2) + ' ha';
 }
 
 /* Los puntos siguen al modo: si el mapa está pintado por especie o por una
@@ -1228,6 +1280,7 @@ function pintarDots() {
     const porEscala = modo !== 'general';
     document.querySelectorAll('.lg-vars .lg-row').forEach(row => {
         const k = row.dataset.vkey;
+        if (SIN_POLIGONO.has(k)) return;
         const color = porEscala ? css('--dat-sindato')
             : modoColor === 'especie' ? COLOR_ESPECIE[k.split('|')[0]] : COLOR_VARIEDAD[k];
         row.querySelector('.lg-dot').style.background = color;
@@ -1307,12 +1360,11 @@ function repintar() {
 }
 
 /* ── Métricas ───────────────────────────────────────────────────────────── */
+/* Se leen las ramas encendidas, no los polígonos dibujados: así las dos
+   variedades que el modelo tiene y el KMZ no dibuja siguen sumando. */
 const clavesVisibles = () => {
     const s = new Set();
-    GEO.cuarteles.features.forEach(f => {
-        const p = f.properties;
-        if (visibles.has(vkey(p.especie, p.variedad))) (p.modelo || []).forEach(k => s.add(k));
-    });
+    visibles.forEach(k => (MODELOS_DE_VKEY[k] || []).forEach(m => s.add(m)));
     return [...s].map(k => MIDX[k]).filter(Boolean);
 };
 
@@ -1490,33 +1542,6 @@ function volarAVariedad(clave) {
    serie son tres magnitudes en US$ y el ranking una sola en US$/ha. */
 const VIZ = { s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a' };
 
-/* Etiqueta directa al final de cada línea: con tres series, la caja de leyenda
-   sola obliga a ir y volver entre el color y el nombre. */
-const etiquetasAlFinal = {
-    id: 'etiquetasAlFinal',
-    afterDatasetsDraw(ch) {
-        const { ctx } = ch;
-        ctx.save();
-        ctx.font = '600 10px "Fira Sans", sans-serif';
-        ctx.textBaseline = 'middle';
-        // Dos series que terminan casi al mismo nivel dejarian sus etiquetas
-        // encimadas: se separan lo minimo para que ambas se lean.
-        const puestas = [];
-        ch.data.datasets.forEach((ds, i) => {
-            const meta = ch.getDatasetMeta(i);
-            if (meta.hidden) return;
-            const pt = meta.data[meta.data.length - 1];
-            if (!pt) return;
-            let y = pt.y;
-            while (puestas.some(v => Math.abs(v - y) < 11)) y += 11;
-            puestas.push(y);
-            ctx.fillStyle = ds.borderColor;
-            ctx.fillText(ds.label, Math.min(pt.x + 6, ch.chartArea.right - 44), y);
-        });
-        ctx.restore();
-    }
-};
-
 /* Línea de cero marcada en el ranking: sin ella, en una escala divergente hay
    que adivinar dónde una barra deja de sumar y empieza a restar. */
 const lineaCero = {
@@ -1535,11 +1560,6 @@ const lineaCero = {
     }
 };
 
-/* Rango del eje Y calculado, no heredado del automatico de Chart.js: con
-   maxTicksLimit el algoritmo elige pasos redondos hacia afuera y deja franjas
-   enteras vacias -para datos de -0,2M a 6,6M llegaba a dibujar de -5M a 10M-.
-   Aca el paso sale de la amplitud real y se redondea a 1, 2, 2,5 o 5 por
-   decada, que son los cortes que la vista lee sin pensar. */
 function rangoY(valores) {
     const v = valores.filter(x => x != null && isFinite(x));
     if (!v.length) return {};
@@ -1563,6 +1583,11 @@ function ejes() {
     };
 }
 
+/* Dos vistas, un eje cada una. La de temporada era una curva de veintiún puntos
+   que se aplanaba en el cuarto: diecisiete temporadas de línea recta para
+   contar que el modelo asume plena producción. En barras, y sólo con las
+   temporadas que cambian, se ve de un vistazo cuánto sube el EBITDA y cuánto
+   de los ingresos se lleva el costo. */
 function dibujarGrafico(regs) {
     const cv = $('chart');
     if (grafico) { grafico.destroy(); grafico = null; }
@@ -1572,6 +1597,7 @@ function dibujarGrafico(regs) {
         ? Math.max(200, regs.length * 16 + 44) + 'px' : '236px';
 
     const { base, tick } = ejes();
+    const produccion = modo === 'produccion';
     const comun = {
         maintainAspectRatio: false,
         animation: { duration: 220 },
@@ -1584,32 +1610,30 @@ function dibujarGrafico(regs) {
             }
         }
     };
-    const produccion = modo === 'produccion';
-    const ton = i => regs.reduce((a, v) => a + (v.produccion[i] || 0) * (v.kg_por_unidad || 1), 0) / 1000;
+    const barra = { borderRadius: 3, borderSkipped: false, categoryPercentage: 0.7, barPercentage: 0.9 };
 
     if (vistaGrafico === 'serie') {
-        // Las etiquetas del eje x se pintan cada tres temporadas: veintiuna
-        // seguidas se solapan y el eje deja de leerse.
-        const labels = MOD.temporadas.map(s => s.slice(2, 4) + '/' + s.slice(7, 9));
+        const idx = [...Array(UTILES).keys()];
+        const ton = i => regs.reduce((a, v) => a + (v.produccion[i] || 0) * (v.kg_por_unidad || 1), 0) / 1000;
         const datasets = produccion
-            ? [{ label: 'Producción', data: MOD.temporadas.map((_, i) => ton(i)), borderColor: VIZ.s1, backgroundColor: VIZ.s1 }]
-            : [{ label: 'Ingresos', data: MOD.temporadas.map((_, i) => agregado(regs, i).ingresos), borderColor: VIZ.s1, backgroundColor: VIZ.s1 },
-               { label: 'Costos',   data: MOD.temporadas.map((_, i) => agregado(regs, i).costos),   borderColor: VIZ.s2, backgroundColor: VIZ.s2 },
-               { label: 'EBITDA',   data: MOD.temporadas.map((_, i) => agregado(regs, i).ebitda),   borderColor: VIZ.s3, backgroundColor: VIZ.s3 }];
+            ? [{ label: 'Producción', data: idx.map(ton), backgroundColor: VIZ.s1, ...barra }]
+            : [{ label: 'Ingresos', data: idx.map(i => agregado(regs, i).ingresos), backgroundColor: VIZ.s1, ...barra },
+               { label: 'Costos',   data: idx.map(i => agregado(regs, i).costos),   backgroundColor: VIZ.s2, ...barra },
+               { label: 'EBITDA',   data: idx.map(i => agregado(regs, i).ebitda),   backgroundColor: VIZ.s3, ...barra }];
 
         grafico = new Chart(cv, {
-            type: 'line',
-            data: { labels, datasets: datasets.map(d => ({ ...d, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4.5, tension: 0.2 })) },
+            type: 'bar',
+            data: { labels: idx.map(i => MOD.temporadas[i].replace('-', '/')), datasets },
             options: {
                 ...comun,
-                layout: { padding: { right: produccion ? 8 : 46, top: 4 } },
-                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     ...comun.plugins,
-                    // La identidad de cada serie va escrita al final de su línea,
-                    // que es un canal no-color y además no obliga a mirar dos
-                    // veces. Una caja de leyenda repetiría esos tres nombres.
-                    legend: { display: false },
+                    // En barras agrupadas la etiqueta no puede ir pegada a la
+                    // serie, así que acá la leyenda sí hace falta.
+                    legend: produccion ? { display: false } : {
+                        position: 'bottom',
+                        labels: { boxWidth: 8, boxHeight: 8, padding: 12, usePointStyle: true, pointStyle: 'rect', color: css('--sem-text-2'), font: { family: 'Fira Sans', size: 10 } }
+                    },
                     tooltip: {
                         ...comun.plugins.tooltip,
                         callbacks: {
@@ -1619,7 +1643,7 @@ function dibujarGrafico(regs) {
                     }
                 },
                 scales: {
-                    x: { ...base, grid: { display: false }, ticks: { ...tick, autoSkip: false, maxRotation: 0, minRotation: 0, callback: (v, i) => i % 4 === 0 ? labels[i] : '' } },
+                    x: { ...base, grid: { display: false }, ticks: { ...tick, maxRotation: 0, minRotation: 0 } },
                     y: (() => {
                         const r = rangoY(datasets.flatMap(d => d.data));
                         return { ...base, min: r.min, max: r.max,
@@ -1627,11 +1651,11 @@ function dibujarGrafico(regs) {
                                           callback: v => produccion ? nf(v / 1000, 0) + 'k t' : nf(v / 1e6, 1) + 'M' } };
                     })()
                 }
-            },
-            plugins: produccion ? [] : [etiquetasAlFinal]
+            }
         });
-        $('chartNota').textContent = (produccion ? 'Toneladas' : 'Millones de US$') +
-            ' por temporada. Se aplana en 2028-2029: de ahí en adelante el modelo asume plena producción.';
+        $('chartNota').textContent = produccion
+            ? 'Toneladas por temporada, hasta plena producción.'
+            : 'Millones de US$ por temporada, hasta plena producción.';
         return;
     }
 
@@ -1682,8 +1706,8 @@ function dibujarGrafico(regs) {
 
 /* ── Selectores y modos ─────────────────────────────────────────────────── */
 function construirSelectores() {
-    $('selTemporada').innerHTML = MOD.temporadas.map((s, i) =>
-        `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === 3 ? ' · plena producción' : ''}</option>`).join('');
+    $('selTemporada').innerHTML = MOD.temporadas.slice(0, UTILES).map((s, i) =>
+        `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === UTILES - 1 ? ' · plena producción' : ''}</option>`).join('');
     $('selMetrica').innerHTML = METRICAS_FIN.map(m =>
         `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`).join('');
     $('selTerreno').innerHTML = METRICAS_TERRENO.map(m =>
@@ -1693,21 +1717,30 @@ function construirSelectores() {
             esc(m === 'clase' ? 'Tipo de suelo' : ESCALAS[m].etiqueta)}</option>`).join('');
 }
 
-function cambiarModo(nuevo) {
-    modo = nuevo;
+/* Qué controles corresponden al modo. Vive aparte de cambiarModo porque el
+   arranque también lo necesita: al cargar, la pestaña activa es Vista general y
+   nadie ha hecho clic, así que sin esto el botón Modelo quedaba visible y abría
+   un panel financiero vacío. */
+function sincronizarControles() {
+    const conPanel = modo === 'produccion' || modo === 'financiero';
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
     document.body.classList.toggle('modo-dato', modo !== 'general');
     $('grpColor').hidden = modo !== 'general';
     $('grpMetrica').hidden = modo !== 'financiero';
     $('grpTerreno').hidden = modo !== 'terreno';
     $('grpSuelo').hidden = modo !== 'suelos';
-    const conPanel = modo === 'produccion' || modo === 'financiero';
+    // El terreno y el suelo no cambian con la temporada: el selector sugeriría
+    // que la pendiente se mueve entre 2025 y 2029.
+    $('grpTemporada').hidden = !conPanel;
     $('btnPanel').hidden = !conPanel;
     if (!conPanel && document.body.classList.contains('panel-abierto')) togglePanel(false);
-    // El terreno no cambia con la temporada: el selector sobraría y sugeriría
-    // que la pendiente se mueve entre 2025 y 2046.
-    $('grpTemporada').hidden = modo === 'general' || modo === 'terreno' || modo === 'suelos';
-    if ((modo === 'produccion' || modo === 'financiero') && !document.body.classList.contains('panel-abierto')) togglePanel(true);
+    return conPanel;
+}
+
+function cambiarModo(nuevo) {
+    modo = nuevo;
+    const conPanel = sincronizarControles();
+    if (conPanel && !document.body.classList.contains('panel-abierto')) togglePanel(true);
     repintar();
 }
 

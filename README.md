@@ -181,18 +181,27 @@ margen en Financiero, pendiente y exposición en Terreno, tipo y textura en
 Suelos. Antes apilaba los cinco bloques en todos los modos y llenaba media
 pantalla con datos que nadie había pedido.
 
-**El panel** se abre sólo en Producción y Financiero, y trae dos cosas: un
-gráfico con vista de serie y vista por variedad, y la tabla ordenable, cuyas
-columnas también cambian con el modo —kg/ha y toneladas en Producción; costo/ha,
-EBITDA/ha y margen en Financiero—. La conciliación de superficie y los avisos de
-calidad quedan en una sección plegada. La tabla es además la lectura alternativa
-obligatoria para los colores que no alcanzan 3:1 de contraste.
+**El panel** se abre sólo en Producción y Financiero —fuera de ahí el botón
+abría un panel vacío— y trae dos cosas: un gráfico con vista por temporada y
+vista por variedad, y la tabla ordenable, cuyas columnas también cambian con el
+modo: kg/ha y toneladas en Producción; costo/ha, EBITDA/ha y margen en
+Financiero. La conciliación de superficie y los avisos de calidad quedan en una
+sección plegada. La tabla es además la lectura alternativa obligatoria para los
+colores que no alcanzan 3:1 de contraste.
 
-Los gráficos calculan su propio rango de eje en vez de dejárselo al automático:
-con pasos gruesos, un EBITDA de −0,17 M arrastraba el eje hasta −2 M y dejaba en
-blanco un quinto del gráfico. Las series se identifican con la etiqueta pegada al
-final de su línea, que es un canal no-color; una caja de leyenda repetiría esos
-mismos tres nombres.
+**Sólo se ofrecen las temporadas hasta plena producción** (2025-2026 a
+2028-2029). De ahí en adelante las diecisiete restantes repiten exactamente el
+mismo número, y ofrecerlas en un selector hacía creer que había algo que mirar.
+El corte no está escrito a mano: se calcula comparando los totales temporada
+contra temporada.
+
+Los dos gráficos son de barras. La vista por temporada era una curva de
+veintiún puntos que se aplanaba en el cuarto —diecisiete temporadas de línea
+recta para decir que el modelo asume plena producción—; en barras agrupadas y
+sólo con las temporadas que cambian se ve de una cuánto sube el EBITDA y cuánto
+de los ingresos se lleva el costo. El rango del eje se calcula en vez de
+dejárselo al automático: con pasos gruesos, un EBITDA de −0,17 M arrastraba el
+eje hasta −2 M y dejaba en blanco un quinto del gráfico.
 
 ---
 
@@ -214,10 +223,11 @@ los ingresos y el precio efectivo, compara contra el libro, y donde no cuadra
 usa la serie despejada. Las otras 29 variedades calzan dentro del 2%.
 
 **2. Dos variedades del modelo no tienen polígono en el KMZ:** `Red Globe`
-(2,94 ha) y `Lapins Injerto` (0,46 ha). Suman en los totales del modelo pero no
-se pueden pintar, así que el mapa encendido al 100% muestra 288,83 de las 292,23
-ha — el 99%. Si aparecen en una versión futura del KMZ, se cruzan solas por el
-nombre.
+(2,94 ha) y `Lapins Injerto` (0,46 ha). Aparecen igual en el árbol de la leyenda,
+en cursiva y con el punto hueco, y suman en los totales: por eso el mapa
+encendido entero dice 292,23 ha y no 288,83. Lo que no pueden es pintarse, porque
+no hay polígono que pintar. Si aparecen en una versión futura del KMZ, se cruzan
+solas por el nombre.
 
 Hay además **un cruce aproximado**: el cuartel 8205 va rotulado `Cheery Moon` en
 el KMZ y el modelo no tiene esa variedad; tiene `Cheery Treat Injerto.`, que en
