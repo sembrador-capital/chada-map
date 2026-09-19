@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hacienda Chada: Huelquén — Mapa Interactivo</title>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   SISTEMA DE DISEÑO SEMBRADOR · Hacienda Chada: Huelquén — mapa interactivo
+   Mismo chrome que Ketcal y San Gerardo: los tres predios comparten producto,
+   así que comparten tipografía, radios, sombras, escalas y paleta.
+   Única fuente de color: el bloque :root. Fuera de :root no hay literales de
+   color salvo la paleta de especies, que se declara acá mismo como tokens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+    /* ---- Paleta oficial Sembrador (theme corporativo) ---- */
+    --sem-navy:        #2B4973;
+    --sem-celeste:     #9CC1D9;
+    --sem-slate:       #6D7C86;
+    --sem-grey:        #A3ABB6;
+    --sem-green:       #335A34;
+    --sem-beige:       #D2CEC5;
+
+    /* ---- Derivados (tintes y sombras de los oficiales) ---- */
+    --sem-navy-dark:     #1F3557;
+    --sem-navy-light:    #3D5D8A;
+    --sem-navy-wash:     #EDF1F6;
+    --sem-green-light:   #4A7A4B;
+    --sem-celeste-wash:  #E8F1F7;
+    --sem-beige-wash:    #F5F3EF;
+    --sem-beige-line:    #E4E1DA;
+    --sem-slate-wash:    #F2F4F5;
+
+    /* ---- Texto ---- */
+    --sem-ink:           #1A2733;
+    --sem-text-2:        var(--sem-slate);
+    --sem-text-3:        var(--sem-grey);
+
+    /* ---- Superficies y bordes ---- */
+    --sem-surface:       #FFFFFF;
+    --sem-line:          var(--sem-beige-line);
+    --sem-border-hair:   1px solid #E4E1DA;
+    --sem-border-soft:   1px solid #EFEDE8;
+    --sem-border-strong: 1px solid #D2CEC5;
+    --sem-border-accent: 1px solid #2B4973;
+
+    /* ---- Escala de z-index. Ningún z-index fuera de esta escala. ---- */
+    --z-map:      1;
+    --z-legend:   10;
+    --z-controls: 20;
+    --z-popup:    40;
+    --z-tooltip:  60;
+
+    /* ---- Forma ---- */
+    --sem-radius:        8px;
+    --sem-radius-lg:     12px;
+    --sem-radius-pill:   20px;
+    --sem-shadow-sm:     0 1px 3px rgba(26,39,51,0.08);
+    --sem-shadow-md:     0 4px 16px rgba(26,39,51,0.12);
+    --sem-shadow-lg:     0 12px 40px rgba(26,39,51,0.22);
+    --sem-focus-ring:    0 0 0 3px rgba(43,73,115,0.12);
+    --sem-scrim:         rgba(22,36,58,0.80);
+    --sem-hover-a:       rgba(43,73,115,0.06);
+
+    /* ═══ TOKENS DE DATOS · paleta de especies ═══
+       El chrome usa la paleta de marca; las especies necesitan ocho colores
+       que se distingan sobre satelital, así que tienen escala propia. Cada
+       variedad deriva del color de su especie rotando tono y luminosidad
+       (ver derivarPaletaVariedades): así el mapa se lee primero por especie
+       y recién después por variedad. */
+    --esp-uva-mesa:   #8E5BB5;   /* violeta   · h278 */
+    --esp-vinifera:   #8C2F4A;   /* burdeos   · h343, oscuro */
+    --esp-cerezos:    #C0392B;   /* rojo      · h6   */
+    --esp-naranjos:   #E08A2E;   /* naranja   · h32  */
+    --esp-clementina: #E6C229;   /* amarillo  · h50  */
+    --esp-paltos:     #2E7D4F;   /* verde     · h150 */
+    --esp-ciruelos:   #3F82BE;   /* azul      · h209. El único hueco libre del
+                                    círculo: el rosa chocaba con el burdeos de
+                                    vinífera, y la separación entre especies
+                                    manda sobre el parecido con la fruta. */
+    --esp-disponible: #8A929C;   /* gris: sin plantación productiva */
+}
+
+* { box-sizing:border-box; }
+html, body { margin:0; padding:0; height:100%; overflow:hidden; }
+body {
+    font-family:'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color:var(--sem-ink); background:var(--sem-beige-wash);
+    -webkit-font-smoothing:antialiased;
+}
+#map { position:absolute; inset:0; z-index:var(--z-map); }
+
+/* Superficie base de todo panel flotante: sombra + hairline, nunca ambos fuertes. */
+.glass {
+    background:var(--sem-surface);
+    border:var(--sem-border-hair);
+    border-radius:var(--sem-radius-lg);
+    box-shadow:var(--sem-shadow-md);
+}
+
+/* ── COMPONENTE 1 · Barra de navegación ─────────────────────────────────── */
+.tabs {
+    position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:var(--z-controls);
+    display:flex; gap:2px; padding:0 6px;
+    background:var(--sem-surface);
+    border:var(--sem-border-hair); border-bottom:2px solid var(--sem-line);
+    border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-sm);
+    max-width:min(1040px, calc(100vw - 32px)); overflow-x:auto; scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar { display:none; }
+.tab-btn {
+    padding:9px 12px; border:none; background:transparent; font-family:inherit;
+    font-size:11.5px; font-weight:400; color:var(--sem-text-2);
+    cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px;
+    border-bottom:2px solid transparent; margin-bottom:-2px; border-radius:0;
+    transition:color 0.15s ease, background 0.15s ease;
+}
+.tab-btn:hover:not(:disabled) { color:var(--sem-navy-light); background:var(--sem-beige-wash); }
+.tab-btn.active { color:var(--sem-navy); font-weight:500; border-bottom:2px solid var(--sem-green); }
+.tab-btn:disabled { color:var(--sem-text-3); cursor:not-allowed; }
+.tab-btn:focus-visible { outline:none; background:var(--sem-navy-wash); box-shadow:var(--sem-focus-ring); }
+.tab-btn .ic { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; flex:0 0 15px; }
+.tab-btn .ic svg { width:15px; height:15px; display:block; }
+.tabs-sep { flex:0 0 1px; align-self:center; width:1px; height:18px; margin:0 6px; background:var(--sem-line); }
+use[href^="#ic-"] { stroke:currentColor; }
+
+/* ── COMPONENTE 2 · Controles ───────────────────────────────────────────── */
+.controls {
+    position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:var(--z-controls);
+    padding:7px 11px; display:flex; gap:8px; align-items:center;
+    background:var(--sem-surface); border:var(--sem-border-hair);
+    border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-md);
+}
+.fc-group { display:flex; flex-direction:column; gap:3px; }
+.fc-label {
+    font-size:9.5px; line-height:1.2; font-weight:500; letter-spacing:0.04em;
+    text-transform:uppercase; color:var(--sem-text-2);
+}
+.fc-select, .fc-search {
+    height:29px; background:var(--sem-surface); border:var(--sem-border-hair);
+    border-radius:var(--sem-radius); color:var(--sem-ink);
+    font-family:inherit; font-size:11.5px; font-weight:400; outline:none;
+    transition:border-color 0.15s, box-shadow 0.15s;
+}
+.fc-select {
+    padding:0 27px 0 10px; min-width:150px; cursor:pointer; appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10' fill='none'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%236D7C86' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 11px center;
+}
+.fc-search { padding:0 10px; min-width:170px; }
+.fc-select:hover, .fc-search:hover { border:var(--sem-border-strong); }
+.fc-select:focus, .fc-search:focus { border:var(--sem-border-accent); box-shadow:var(--sem-focus-ring); }
+.fc-divider { width:1px; align-self:stretch; background:var(--sem-line); margin:0 2px; }
+
+.fc-btn {
+    align-self:flex-end; height:29px; padding:0 11px;
+    background:transparent; border:var(--sem-border-hair); color:var(--sem-ink);
+    font-family:inherit; font-size:11.5px; font-weight:500; border-radius:var(--sem-radius);
+    cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;
+    transition:background 0.15s, border-color 0.15s;
+}
+.fc-btn .ic { display:inline-flex; width:15px; height:15px; }
+.fc-btn .ic svg { width:15px; height:15px; }
+.fc-btn:hover { background:var(--sem-beige-wash); border:var(--sem-border-strong); }
+.fc-btn.abierto { background:var(--sem-navy); border-color:var(--sem-navy); color:var(--sem-surface); }
+.fc-btn:focus-visible { outline:none; box-shadow:var(--sem-focus-ring); }
+
+/* Popover "Vista": qué capas se dibujan y sobre qué base. Lo que se cambia
+   todo el tiempo queda en la barra; lo que se ajusta una vez, acá adentro. */
+.fc-pop-wrap { position:relative; display:flex; align-self:flex-end; }
+.fc-pop {
+    position:absolute; top:calc(100% + 13px); right:0; z-index:var(--z-popup);
+    min-width:212px; padding:11px 13px 12px;
+    background:var(--sem-surface); border:var(--sem-border-hair);
+    border-radius:var(--sem-radius); box-shadow:var(--sem-shadow-md);
+    display:flex; flex-direction:column; gap:11px;
+}
+.fc-pop[hidden] { display:none; }
+.fc-pop-sect { display:flex; flex-direction:column; gap:6px; }
+.fc-pop-title {
+    font-size:9.5px; font-weight:600; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--sem-text-3);
+}
+.fc-pop-action {
+    height:29px; padding:0 10px; width:100%;
+    background:transparent; border:var(--sem-border-hair); color:var(--sem-ink);
+    font-family:inherit; font-size:11.5px; font-weight:500;
+    border-radius:var(--sem-radius); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    transition:background 0.15s, border-color 0.15s;
+}
+.fc-pop-action:hover { background:var(--sem-beige-wash); border:var(--sem-border-strong); }
+
+/* ── COMPONENTE 3 · Interruptor de capa ─────────────────────────────────── */
+.sw { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11.5px; color:var(--sem-ink); }
+.sw input { position:absolute; opacity:0; width:0; height:0; }
+.sw-track {
+    flex:0 0 28px; width:28px; height:16px; border-radius:var(--sem-radius-pill);
+    background:var(--sem-beige); position:relative; transition:background 0.15s;
+}
+.sw-track::after {
+    content:''; position:absolute; top:2px; left:2px; width:12px; height:12px;
+    border-radius:50%; background:var(--sem-surface); box-shadow:var(--sem-shadow-sm);
+    transition:transform 0.15s;
+}
+.sw input:checked + .sw-track { background:var(--sem-green); }
+.sw input:checked + .sw-track::after { transform:translateX(12px); }
+.sw input:focus-visible + .sw-track { box-shadow:var(--sem-focus-ring); }
+
+/* ── COMPONENTE 4 · Barra de métricas ───────────────────────────────────── */
+.stats-bar {
+    position:absolute; top:12px; right:16px; z-index:var(--z-legend);
+    padding:8px 12px; display:flex; gap:13px; align-items:stretch;
+}
+.stat { display:flex; flex-direction:column; gap:1px; min-width:52px; }
+.stat + .stat { padding-left:13px; border-left:var(--sem-border-soft); }
+.stat-val { font-size:15px; font-weight:600; line-height:1.15; color:var(--sem-navy); font-variant-numeric:tabular-nums; }
+.stat-lbl { font-size:9.5px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; color:var(--sem-text-2); }
+
+/* ── COMPONENTE 5 · Leyenda / árbol de especies y variedades ────────────── */
+.legend-panel {
+    position:absolute; top:60px; left:16px; bottom:20px; width:272px; z-index:var(--z-legend);
+    display:flex; flex-direction:column;
+    background:var(--sem-surface); border:var(--sem-border-hair);
+    border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-md);
+    transition:transform 0.2s ease, opacity 0.2s ease;
+}
+body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer-events:none; }
+.legend-head {
+    padding:10px 12px 9px; border-bottom:var(--sem-border-hair);
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+.legend-title { font-size:12px; font-weight:600; color:var(--sem-ink); }
+.legend-sub { font-size:10px; color:var(--sem-text-2); margin-top:1px; }
+.legend-actions { display:flex; gap:4px; }
+.legend-mini {
+    height:22px; padding:0 8px; background:transparent; border:var(--sem-border-hair);
+    border-radius:var(--sem-radius); font-family:inherit; font-size:10px; font-weight:500;
+    color:var(--sem-text-2); cursor:pointer; transition:background 0.15s, color 0.15s;
+}
+.legend-mini:hover { background:var(--sem-beige-wash); color:var(--sem-ink); }
+.legend-body { overflow-y:auto; padding:6px 6px 10px; flex:1; scrollbar-width:thin; }
+
+.lg-esp { margin-bottom:2px; }
+.lg-row {
+    display:flex; align-items:center; gap:7px; padding:5px 6px;
+    border-radius:var(--sem-radius); cursor:pointer; user-select:none;
+}
+.lg-row:hover { background:var(--sem-beige-wash); }
+.lg-row.off .lg-name, .lg-row.off .lg-meta { color:var(--sem-text-3); }
+.lg-row.off .lg-dot { opacity:0.25; }
+.lg-caret {
+    flex:0 0 12px; width:12px; height:12px; color:var(--sem-text-3);
+    display:inline-flex; align-items:center; justify-content:center;
+    transition:transform 0.15s;
+}
+.lg-esp.abierta .lg-caret { transform:rotate(90deg); }
+.lg-dot { flex:0 0 11px; width:11px; height:11px; border-radius:3px; border:1px solid rgba(26,39,51,0.18); }
+.lg-name { flex:1; font-size:11.5px; font-weight:500; color:var(--sem-ink); line-height:1.25; }
+.lg-meta { font-size:10px; color:var(--sem-text-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.lg-vars { display:none; padding:1px 0 4px 20px; }
+.lg-esp.abierta .lg-vars { display:block; }
+.lg-vars .lg-row { padding:3px 6px; }
+.lg-vars .lg-name { font-size:11px; font-weight:400; }
+.lg-vars .lg-dot { flex:0 0 9px; width:9px; height:9px; border-radius:2px; }
+
+/* ── COMPONENTE 6 · Ficha del cuartel (hover y fijada) ──────────────────── */
+.card {
+    position:absolute; z-index:var(--z-tooltip); width:252px; padding:0;
+    background:var(--sem-surface); border:var(--sem-border-hair);
+    border-radius:var(--sem-radius); box-shadow:var(--sem-shadow-lg);
+    pointer-events:none; opacity:0; transition:opacity 0.12s;
+}
+.card.visible { opacity:1; }
+.card.fija { pointer-events:auto; }
+.card-head { padding:9px 11px 8px; border-bottom:var(--sem-border-hair); position:relative; }
+.card-especie {
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:9.5px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;
+    color:var(--sem-text-2); margin-bottom:3px;
+}
+.card-especie .lg-dot { flex:0 0 8px; width:8px; height:8px; border-radius:2px; }
+.card-cuartel { font-size:14px; font-weight:600; color:var(--sem-ink); line-height:1.2; }
+.card-variedad { font-size:11.5px; color:var(--sem-navy); font-weight:500; margin-top:2px; }
+.card-close {
+    position:absolute; top:7px; right:7px; width:20px; height:20px; padding:0;
+    display:none; align-items:center; justify-content:center;
+    background:transparent; border:none; border-radius:var(--sem-radius);
+    color:var(--sem-text-3); cursor:pointer;
+}
+.card.fija .card-close { display:flex; }
+.card-close:hover { background:var(--sem-beige-wash); color:var(--sem-ink); }
+.card-body { padding:8px 11px 10px; display:flex; flex-direction:column; gap:6px; }
+.card-kv { display:flex; justify-content:space-between; gap:10px; font-size:11px; align-items:baseline; }
+.card-k { color:var(--sem-text-2); }
+.card-v { color:var(--sem-ink); font-weight:500; text-align:right; font-variant-numeric:tabular-nums; }
+.card-mix { border-top:var(--sem-border-soft); padding-top:7px; display:flex; flex-direction:column; gap:3px; }
+.card-mix-title {
+    font-size:9px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;
+    color:var(--sem-text-3); margin-bottom:1px;
+}
+.card-chip {
+    display:flex; justify-content:space-between; gap:8px; font-size:10.5px;
+    padding:2px 6px; background:var(--sem-slate-wash); border-radius:var(--sem-radius);
+}
+.card-chip span:first-child { color:var(--sem-ink); }
+.card-chip span:last-child { color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
+.card-nota {
+    font-size:10.5px; color:var(--sem-navy); background:var(--sem-navy-wash);
+    padding:3px 7px; border-radius:var(--sem-radius); align-self:flex-start;
+}
+.card-hint {
+    border-top:var(--sem-border-soft); padding-top:6px; margin-top:1px;
+    font-size:9.5px; color:var(--sem-text-3);
+}
+
+/* ── Chrome de Mapbox alineado al sistema ───────────────────────────────── */
+.mapboxgl-ctrl-group { border:var(--sem-border-hair); box-shadow:var(--sem-shadow-sm); border-radius:var(--sem-radius); }
+.mapboxgl-ctrl-group button { background-color:var(--sem-surface); }
+.mapboxgl-ctrl-bottom-left { left:296px; }
+body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
+
+.data-stamp {
+    position:absolute; bottom:20px; right:16px; z-index:var(--z-legend);
+    padding:5px 9px; font-size:9.5px; color:var(--sem-text-2);
+    background:var(--sem-surface); border:var(--sem-border-hair);
+    border-radius:var(--sem-radius); box-shadow:var(--sem-shadow-sm);
+}
+
+.loader {
+    position:absolute; inset:0; z-index:var(--z-tooltip);
+    display:flex; align-items:center; justify-content:center;
+    background:var(--sem-beige-wash); font-size:12px; color:var(--sem-text-2);
+}
+.loader[hidden] { display:none; }
+
+/* ── Adaptación a pantallas angostas ────────────────────────────────────── */
+@media (max-width:900px) {
+    .tabs { left:8px; right:8px; transform:none; max-width:none; border-radius:var(--sem-radius); }
+    .controls {
+        top:56px; left:8px; right:8px; transform:none;
+        flex-wrap:wrap; border-radius:var(--sem-radius);
+    }
+    .stats-bar { top:auto; bottom:20px; right:8px; left:8px; overflow-x:auto; scrollbar-width:none; }
+    .legend-panel { top:auto; bottom:78px; left:8px; width:min(272px, calc(100vw - 16px)); max-height:46vh; }
+    .mapboxgl-ctrl-bottom-left { left:0; }
+    .data-stamp { display:none; }
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class="loader" id="loader">Cargando cuarteles…</div>
+
+<!-- Set único de íconos de línea, SVG inline, trazo 1.5px, currentColor. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+    <g id="ic-mapa" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M9 2.5 5.5 4 2 2.5v11L5.5 12 9 13.5 12.5 12 16 13.5v-11L12.5 4 9 2.5Z"/><path d="M6 4v8M12 6v8"/></g>
+    <g id="ic-barras" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M2.5 15h13"/><path d="M5 15V8M9 15V4M13 15v-4"/></g>
+    <g id="ic-billete" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M2 5h14v8H2V5Z"/><path d="M9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M4.5 7.2v3.6M13.5 7.2v3.6"/></g>
+    <g id="ic-capas" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M9 2.5 2.5 6 9 9.5 15.5 6 9 2.5Z"/><path d="M2.5 9.6 9 13.1l6.5-3.5"/><path d="M2.5 13.1 9 16.6l6.5-3.5"/></g>
+    <g id="ic-ampliar" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M7.5 3.5h-4v4"/><path d="M10.5 14.5h4v-4"/><path d="M3.5 3.5l4.5 4.5M14.5 14.5L10 10"/></g>
+    <g id="ic-cerrar" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+        <path d="M4.5 4.5l9 9M13.5 4.5l-9 9"/></g>
+    <g id="ic-caret" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6">
+        <path d="M6.5 3.5 12 9l-5.5 5.5"/></g>
+</defs></svg>
+
+<div class="tabs">
+    <button class="tab-btn active" data-mode="general"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-mapa"/></svg></span><span>Vista general</span></button>
+    <span class="tabs-sep" aria-hidden="true"></span>
+    <!-- Pendientes. Se muestran deshabilitadas a propósito: la hoja de ruta es
+         parte de la información, y una pestaña que aparece de la nada más
+         adelante desorienta más que una que se anuncia. -->
+    <button class="tab-btn" disabled title="Producciones por cuartel · pendiente de cruce"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-barras"/></svg></span><span>Producción</span></button>
+    <button class="tab-btn" disabled title="Ingresos, costos y EBITDA del modelo financiero · pendiente"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-billete"/></svg></span><span>Financiero</span></button>
+</div>
+
+<div class="controls">
+    <div class="fc-group">
+        <label class="fc-label" for="selColor">Colorear por</label>
+        <select class="fc-select" id="selColor">
+            <option value="especie">Especie</option>
+            <option value="variedad" selected>Variedad</option>
+        </select>
+    </div>
+    <div class="fc-group">
+        <label class="fc-label" for="inpBuscar">Buscar cuartel</label>
+        <input class="fc-search" id="inpBuscar" list="dlCuarteles" autocomplete="off" placeholder="5218-A, Sweet Globe…">
+        <datalist id="dlCuarteles"></datalist>
+    </div>
+    <div class="fc-divider" aria-hidden="true"></div>
+    <div class="fc-pop-wrap">
+        <button type="button" class="fc-btn" id="btnVista" aria-haspopup="true" aria-expanded="false" aria-controls="popVista" title="Capas y encuadre">
+            <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-capas"/></svg></span><span>Vista</span>
+        </button>
+        <div class="fc-pop" id="popVista" hidden>
+            <div class="fc-pop-sect">
+                <div class="fc-pop-title">Capas</div>
+                <label class="sw"><input type="checkbox" id="swRelleno" checked><span class="sw-track"></span><span>Relleno de cuarteles</span></label>
+                <label class="sw"><input type="checkbox" id="swContorno" checked><span class="sw-track"></span><span>Contorno</span></label>
+                <label class="sw"><input type="checkbox" id="swEtiquetas" checked><span class="sw-track"></span><span>Etiquetas de cuartel</span></label>
+                <label class="sw"><input type="checkbox" id="swLeyenda" checked><span class="sw-track"></span><span>Panel de leyenda</span></label>
+                <label class="sw"><input type="checkbox" id="swMetricas" checked><span class="sw-track"></span><span>Barra de métricas</span></label>
+            </div>
+            <div class="fc-pop-sect">
+                <div class="fc-pop-title">Base</div>
+                <label class="sw"><input type="checkbox" id="swSatelital" checked><span class="sw-track"></span><span>Imagen satelital</span></label>
+            </div>
+            <div class="fc-pop-sect">
+                <div class="fc-pop-title">Encuadre</div>
+                <button type="button" class="fc-pop-action" id="btnEncuadrar">
+                    <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-ampliar"/></svg></span><span>Ver todo el predio</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="stats-bar glass" id="statsBar" aria-live="polite"></div>
+
+<div class="legend-panel" id="legend">
+    <div class="legend-head">
+        <div>
+            <div class="legend-title">Especies y variedades</div>
+            <div class="legend-sub" id="legendSub"></div>
+        </div>
+        <div class="legend-actions">
+            <button type="button" class="legend-mini" id="btnTodo">Todo</button>
+            <button type="button" class="legend-mini" id="btnNada">Nada</button>
+        </div>
+    </div>
+    <div class="legend-body" id="legendBody"></div>
+</div>
+
+<div class="card" id="card" role="dialog" aria-live="polite"></div>
+<div class="data-stamp" id="dataStamp"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Hacienda Chada: Huelquén — mapa interactivo
+   Fuente única de datos: geo_data.json, derivado del KMZ por
+   tools/kml_to_geojson.py. Este archivo no contiene datos del predio.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+mapboxgl.accessToken = 'pk.eyJ1Ijoicm9sYW5kb3BpbmEiLCJhIjoiY21ydTF0OWVlMDMwNjM2cHgwdTd4NGVzZSJ9.zvp3ej-YuJ1lEZ3HKtlSAw';
+
+const ESTILO_SAT   = 'mapbox://styles/mapbox/satellite-v9';
+const ESTILO_CLARO = 'mapbox://styles/mapbox/light-v11';
+
+/* La clave de una variedad incluye su especie: "Cabernet Sauvignon" existe en
+   Uva vinífera y en Disponible, y "Mixtos" en Cerezos y en Ciruelos. Sin el
+   prefijo, apagar una apagaría la otra. */
+const vkey = (esp, vari) => esp + '|' + vari;
+
+/* Color base de cada especie, leído de los tokens del sistema de diseño para
+   que la paleta siga viviendo en :root y no duplicada en JS. */
+const TOKEN_ESPECIE = {
+    'Uva de mesa':  '--esp-uva-mesa',
+    'Cerezos':      '--esp-cerezos',
+    'Uva vinífera': '--esp-vinifera',
+    'Ciruelos':     '--esp-ciruelos',
+    'Paltos':       '--esp-paltos',
+    'Naranjos':     '--esp-naranjos',
+    'Clementinas':  '--esp-clementina',
+    'Disponible':   '--esp-disponible'
+};
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ── Color ──────────────────────────────────────────────────────────────── */
+function hexAHsl(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (max === min) return [0, 0, l];
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    let h;
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    return [h * 60, s, l];
+}
+/* Sintaxis con comas a propósito: el parser de estilos de Mapbox GL no acepta
+   la forma moderna separada por espacios. */
+const hsl = (h, s, l) => 'hsl(' + Math.round(((h % 360) + 360) % 360) + ',' +
+    Math.round(Math.min(1, Math.max(0, s)) * 100) + '%,' +
+    Math.round(Math.min(0.92, Math.max(0.16, l)) * 100) + '%)';
+
+/* Cada variedad deriva del color de su especie: el tono se abre en abanico y la
+   luminosidad alterna entre un paso claro y uno oscuro. Así una variedad no se
+   confunde con la vecina, pero el bloque entero sigue leyéndose como "esta
+   especie". El abanico se estrecha cuando hay pocas variedades: abrirlo 46° para
+   repartir tres colores los empujaría al territorio de la especie vecina, y en
+   el mapa la distancia entre especies importa más que entre variedades. */
+function derivarPaletaVariedades(especie, variedades) {
+    const [h, s, l] = hexAHsl(css(TOKEN_ESPECIE[especie]) || '#8A929C');
+    const n = variedades.length;
+    const abanico = n <= 2 ? 0 : (n <= 4 ? 26 : 46);
+    const out = {};
+    variedades.forEach((v, i) => {
+        if (n === 1) { out[v] = hsl(h, s, l); return; }
+        const t = i / (n - 1);                                  // 0 → 1
+        const dh = (t - 0.5) * abanico;
+        const dl = (i % 2 === 0 ? 1 : -1) * (0.05 + 0.10 * Math.abs(t - 0.5) * 2);
+        out[v] = hsl(h + dh, s * (0.82 + 0.3 * t), l + dl);
+    });
+    return out;
+}
+
+/* ── Estado ─────────────────────────────────────────────────────────────── */
+let DATA = null;
+let COLOR_ESPECIE = {};       // especie -> color
+let COLOR_VARIEDAD = {};      // vkey    -> color
+const visibles = new Set();   // vkeys encendidos
+let modoColor = 'variedad';
+let fijado = null;            // id del cuartel con ficha fija
+let hoverId = null;
+let estiloSatelital = true;
+
+const $ = id => document.getElementById(id);
+const nf = (x, d = 1) => x.toLocaleString('es-CL', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/* ── Mapa ───────────────────────────────────────────────────────────────── */
+const map = new mapboxgl.Map({
+    container: 'map',
+    style: ESTILO_SAT,
+    center: [-70.643096, -33.885441],
+    zoom: 13.4,
+    attributionControl: false
+});
+map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-left');
+map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+map.addControl(new mapboxgl.ScaleControl({ maxWidth: 90, unit: 'metric' }), 'bottom-left');
+
+fetch('geo_data.json')
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d => {
+        DATA = d;
+        prepararPaletas();
+        construirLeyenda();
+        construirDatalist();
+        $('dataStamp').textContent = 'KMZ ' + (d.generated_at || '').slice(0, 10) + ' · ' + d.source;
+        if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
+    })
+    .catch(e => { $('loader').textContent = 'No se pudo cargar geo_data.json (' + e.message + ')'; });
+
+function prepararPaletas() {
+    DATA.por_especie.forEach(esp => {
+        COLOR_ESPECIE[esp.especie] = css(TOKEN_ESPECIE[esp.especie]) || css('--esp-disponible');
+        const paleta = derivarPaletaVariedades(esp.especie, esp.variedades.map(v => v.variedad));
+        esp.variedades.forEach(v => {
+            const k = vkey(esp.especie, v.variedad);
+            COLOR_VARIEDAD[k] = paleta[v.variedad];
+            visibles.add(k);
+        });
+    });
+}
+
+/* Las expresiones de color son un match sobre especie o sobre la clave
+   compuesta; se reconstruyen al cambiar el selector, no en cada frame. */
+function exprColor() {
+    const pares = [];
+    if (modoColor === 'especie') {
+        Object.entries(COLOR_ESPECIE).forEach(([k, c]) => pares.push(k, c));
+        return ['match', ['get', 'especie'], ...pares, css('--esp-disponible')];
+    }
+    Object.entries(COLOR_VARIEDAD).forEach(([k, c]) => pares.push(k, c));
+    return ['match', ['concat', ['get', 'especie'], '|', ['get', 'variedad']], ...pares, css('--esp-disponible')];
+}
+
+function exprFiltro() {
+    // Un match vacío no es válido: si no hay nada encendido, se filtra todo.
+    if (visibles.size === 0) return ['boolean', false];
+    return ['match', ['concat', ['get', 'especie'], '|', ['get', 'variedad']], [...visibles], true, false];
+}
+
+/* Se llama tanto al arrancar como cada vez que se carga un estilo nuevo: la
+   guarda evita el doble montaje cuando ambos caminos coinciden. */
+function montarCapas() {
+    if (!DATA || map.getSource('cuarteles')) return;
+
+    const puntos = {
+        type: 'FeatureCollection',
+        features: DATA.cuarteles.features.map(f => ({
+            type: 'Feature', id: f.id,
+            properties: f.properties,
+            geometry: { type: 'Point', coordinates: f.properties.centro }
+        }))
+    };
+
+    map.addSource('cuarteles', { type: 'geojson', data: DATA.cuarteles, promoteId: 'uid' });
+    map.addSource('etiquetas', { type: 'geojson', data: puntos });
+
+    map.addLayer({
+        id: 'cuarteles-fill', type: 'fill', source: 'cuarteles',
+        paint: {
+            'fill-color': exprColor(),
+            'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.82,
+                             ['boolean', ['feature-state', 'fijo'], false], 0.82, 0.58]
+        }
+    });
+    // Sobre satelital el contorno se lee en blanco; sobre la base clara
+    // desaparecería, así que ahí pasa a tinta.
+    const cFuerte = estiloSatelital ? '#FFFFFF' : css('--sem-ink');
+    const cSuave  = estiloSatelital ? 'rgba(255,255,255,0.55)' : 'rgba(26,39,51,0.45)';
+    map.addLayer({
+        id: 'cuarteles-line', type: 'line', source: 'cuarteles',
+        paint: {
+            'line-color': ['case', ['boolean', ['feature-state', 'fijo'], false], cFuerte,
+                           ['boolean', ['feature-state', 'hover'], false], cFuerte, cSuave],
+            'line-width': ['case', ['boolean', ['feature-state', 'fijo'], false], 2.6,
+                           ['boolean', ['feature-state', 'hover'], false], 2.2, 0.8]
+        }
+    });
+    map.addLayer({
+        id: 'cuarteles-label', type: 'symbol', source: 'etiquetas',
+        minzoom: 14.2,
+        layout: {
+            'text-field': ['get', 'cuartel'],
+            'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 14.2, 9, 17, 13],
+            'text-allow-overlap': false, 'text-padding': 2
+        },
+        paint: {
+            'text-color': '#FFFFFF',
+            'text-halo-color': 'rgba(26,39,51,0.85)',
+            'text-halo-width': 1.2
+        }
+    });
+
+    aplicarFiltro();
+    // Las capas se remontan cada vez que cambia la base, así que la visibilidad
+    // se reaplica desde los interruptores en vez de darse por sentada.
+    vis('cuarteles-fill',  $('swRelleno').checked);
+    vis('cuarteles-line',  $('swContorno').checked);
+    vis('cuarteles-label', $('swEtiquetas').checked);
+    if (fijado) setEstado(fijado, 'fijo', true);
+}
+
+/* Se corre una sola vez: los listeners viven en el mapa, no en el estilo.
+   Cambiar de base descarta fuentes y capas, así que el remontaje se cuelga de
+   'style.load'. Con 'styledata' no alcanza: se emite antes de que el estilo
+   esté listo y addSource revienta. */
+function inicializar() {
+    map.on('style.load', montarCapas);
+    montarCapas();
+    encuadrar(false);
+    $('loader').hidden = true;
+
+    map.on('mousemove', 'cuarteles-fill', onHover);
+    map.on('mouseleave', 'cuarteles-fill', onLeave);
+    map.on('click', 'cuarteles-fill', onClick);
+    map.on('click', e => {
+        const hits = map.queryRenderedFeatures(e.point, { layers: ['cuarteles-fill'] });
+        if (!hits.length) desfijar();
+    });
+    // Mapbox emite 'mouseleave' de capa sólo si el puntero sigue sobre el canvas.
+    // Al pasar del polígono a la leyenda o a los controles —que son overlays
+    // HTML— no se entera, y la ficha de hover quedaba colgada.
+    $('map').addEventListener('mouseleave', onLeave);
+}
+
+/* ── Interacción ────────────────────────────────────────────────────────── */
+function setEstado(uid, clave, valor) {
+    if (uid == null) return;
+    map.setFeatureState({ source: 'cuarteles', id: uid }, { [clave]: valor });
+}
+
+function onHover(e) {
+    if (!e.features.length) return;
+    const f = e.features[0];
+    map.getCanvas().style.cursor = 'pointer';
+    if (hoverId !== f.properties.uid) {
+        setEstado(hoverId, 'hover', false);
+        hoverId = f.properties.uid;
+        setEstado(hoverId, 'hover', true);
+    }
+    if (!fijado) mostrarFicha(f.properties, e.point);
+}
+
+function onLeave() {
+    map.getCanvas().style.cursor = '';
+    setEstado(hoverId, 'hover', false);
+    hoverId = null;
+    if (!fijado) ocultarFicha();
+}
+
+function onClick(e) {
+    if (!e.features.length) return;
+    const p = e.features[0].properties;
+    setEstado(fijado, 'fijo', false);
+    fijado = p.uid;
+    setEstado(fijado, 'fijo', true);
+    mostrarFicha(p, e.point, true);
+}
+
+function desfijar() {
+    setEstado(fijado, 'fijo', false);
+    fijado = null;
+    ocultarFicha();
+}
+
+/* Las props llegan de Mapbox con los arreglos serializados a string. */
+const arr = v => { try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch (_) { return []; } };
+
+function mostrarFicha(p, punto, fija = false) {
+    const card = $('card');
+    const variedades = arr(p.variedades), cuarteles = arr(p.cuarteles);
+    const color = modoColor === 'especie'
+        ? (COLOR_ESPECIE[p.especie] || css('--esp-disponible'))
+        : (COLOR_VARIEDAD[vkey(p.especie, p.variedad)] || css('--esp-disponible'));
+
+    let mix = '';
+    if (variedades.length > 1) {
+        // Las dos listas vienen en paralelo desde el KMZ: variedad i ↔ cuartel i.
+        mix = '<div class="card-mix"><div class="card-mix-title">Detalle del cuartel mixto</div>' +
+            variedades.map((v, i) => `<div class="card-chip"><span>${esc(v)}</span><span>${esc(cuarteles[i] || '—')}</span></div>`).join('') +
+            '</div>';
+    }
+
+    card.innerHTML = `
+        <div class="card-head">
+            <div class="card-especie"><i class="lg-dot" style="background:${color}"></i>${esc(p.especie)}</div>
+            <div class="card-cuartel">Cuartel ${esc(p.cuartel)}</div>
+            <div class="card-variedad">${esc(variedades.length > 1 ? variedades.join(' · ') : p.variedad)}</div>
+            <button type="button" class="card-close" id="cardClose" aria-label="Cerrar"><svg viewBox="0 0 18 18" width="13" height="13"><use href="#ic-cerrar"/></svg></button>
+        </div>
+        <div class="card-body">
+            <div class="card-kv"><span class="card-k">Superficie</span><span class="card-v">${nf(p.ha, 2)} ha</span></div>
+            <div class="card-kv"><span class="card-k">Especie</span><span class="card-v">${esc(p.especie)}</span></div>
+            <div class="card-kv"><span class="card-k">Variedad</span><span class="card-v">${esc(p.variedad)}</span></div>
+            <div class="card-kv"><span class="card-k">ID interno</span><span class="card-v">${esc(p.uid)}</span></div>
+            ${p.nota ? `<div class="card-nota">${esc(p.nota)}</div>` : ''}
+            ${mix}
+            <div class="card-hint">${fija ? 'Ficha fijada · clic fuera para soltarla' : 'Clic para fijar esta ficha'}</div>
+        </div>`;
+
+    card.classList.toggle('fija', fija);
+    card.classList.add('visible');
+    if (fija) $('cardClose').onclick = desfijar;
+    posicionarFicha(punto);
+}
+
+/* La ficha se abre al lado del cursor y se pliega hacia dentro cuando quedaría
+   fuera de la ventana; nunca tapa el cursor. */
+function posicionarFicha(punto) {
+    const card = $('card'), r = card.getBoundingClientRect();
+    let x = punto.x + 16, y = punto.y + 14;
+    if (x + r.width > window.innerWidth - 12) x = punto.x - r.width - 16;
+    if (y + r.height > window.innerHeight - 12) y = Math.max(12, punto.y - r.height - 14);
+    card.style.left = Math.max(12, x) + 'px';
+    card.style.top = y + 'px';
+}
+
+function ocultarFicha() { $('card').classList.remove('visible', 'fija'); }
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ── Leyenda: árbol especie → variedad, cada nodo enciende y apaga ──────── */
+function construirLeyenda() {
+    const body = $('legendBody');
+    body.innerHTML = DATA.por_especie.map(esp => {
+        const vars = esp.variedades.map(v => {
+            const k = vkey(esp.especie, v.variedad);
+            return `<div class="lg-row" data-vkey="${esc(k)}">
+                        <i class="lg-dot" style="background:${COLOR_VARIEDAD[k]}"></i>
+                        <span class="lg-name">${esc(v.variedad)}</span>
+                        <span class="lg-meta">${nf(v.ha, 1)} ha</span>
+                    </div>`;
+        }).join('');
+        return `<div class="lg-esp abierta" data-especie="${esc(esp.especie)}">
+                    <div class="lg-row lg-esp-row">
+                        <span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>
+                        <i class="lg-dot" style="background:${COLOR_ESPECIE[esp.especie]}"></i>
+                        <span class="lg-name">${esc(esp.especie)}</span>
+                        <span class="lg-meta">${esp.cuarteles} · ${nf(esp.ha, 1)} ha</span>
+                    </div>
+                    <div class="lg-vars">${vars}</div>
+                </div>`;
+    }).join('');
+
+    // Un clic en el nombre enciende o apaga; el caret sólo pliega la rama.
+    body.querySelectorAll('.lg-esp-row').forEach(row => {
+        row.addEventListener('click', ev => {
+            const esp = row.closest('.lg-esp');
+            if (ev.target.closest('.lg-caret')) { esp.classList.toggle('abierta'); return; }
+            const keys = [...esp.querySelectorAll('.lg-vars .lg-row')].map(r => r.dataset.vkey);
+            const encender = keys.some(k => !visibles.has(k));
+            keys.forEach(k => encender ? visibles.add(k) : visibles.delete(k));
+            aplicarFiltro();
+        });
+    });
+    body.querySelectorAll('.lg-vars .lg-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const k = row.dataset.vkey;
+            visibles.has(k) ? visibles.delete(k) : visibles.add(k);
+            aplicarFiltro();
+        });
+    });
+
+    $('legendSub').textContent = DATA.totales.especies + ' especies · ' + DATA.totales.variedades + ' variedades';
+}
+
+/* Los puntos de variedad siguen al modo de color: si el mapa está pintado por
+   especie, una leyenda con 26 colores distintos prometería una distinción que
+   el mapa no hace. */
+function pintarDots() {
+    document.querySelectorAll('.lg-vars .lg-row').forEach(row => {
+        const k = row.dataset.vkey;
+        const color = modoColor === 'especie'
+            ? COLOR_ESPECIE[k.split('|')[0]]
+            : COLOR_VARIEDAD[k];
+        row.querySelector('.lg-dot').style.background = color;
+    });
+}
+
+function pintarLeyenda() {
+    document.querySelectorAll('.lg-vars .lg-row').forEach(row => {
+        row.classList.toggle('off', !visibles.has(row.dataset.vkey));
+    });
+    document.querySelectorAll('.lg-esp').forEach(esp => {
+        const keys = [...esp.querySelectorAll('.lg-vars .lg-row')].map(r => r.dataset.vkey);
+        esp.querySelector('.lg-esp-row').classList.toggle('off', !keys.some(k => visibles.has(k)));
+    });
+}
+
+/* El filtro es la única puerta: capas, métricas y leyenda leen el mismo set. */
+function aplicarFiltro() {
+    const f = exprFiltro();
+    ['cuarteles-fill', 'cuarteles-line', 'cuarteles-label'].forEach(id => {
+        if (map.getLayer(id)) map.setFilter(id, f);
+    });
+    if (fijado) {
+        const p = DATA.cuarteles.features.find(x => x.properties.uid === fijado);
+        if (p && !visibles.has(vkey(p.properties.especie, p.properties.variedad))) desfijar();
+    }
+    pintarLeyenda();
+    pintarMetricas();
+}
+
+function pintarMetricas() {
+    const enPantalla = DATA.cuarteles.features.filter(f => visibles.has(vkey(f.properties.especie, f.properties.variedad)));
+    const ha = enPantalla.reduce((a, f) => a + f.properties.ha, 0);
+    const esp = new Set(enPantalla.map(f => f.properties.especie));
+    const totales = DATA.totales;
+    // La fracción del predio va dentro de la etiqueta de hectáreas, no como una
+    // quinta métrica: la barra está anclada a la derecha y al crecer se metía
+    // debajo de la barra de pestañas.
+    const parcial = enPantalla.length && enPantalla.length < totales.cuarteles;
+    const pct = parcial ? ` · ${Math.round(ha / totales.ha * 100)}%` : '';
+    const plural = (n, sing, pl) => n === 1 ? sing : pl;
+    $('statsBar').innerHTML = `
+        <div class="stat"><span class="stat-val">${nf(ha, 1)}</span><span class="stat-lbl">Hectáreas${pct}</span></div>
+        <div class="stat"><span class="stat-val">${enPantalla.length}</span><span class="stat-lbl">${plural(enPantalla.length, 'Cuartel', 'Cuarteles')}</span></div>
+        <div class="stat"><span class="stat-val">${esp.size}</span><span class="stat-lbl">${plural(esp.size, 'Especie', 'Especies')}</span></div>
+        <div class="stat"><span class="stat-val">${visibles.size}</span><span class="stat-lbl">${plural(visibles.size, 'Variedad', 'Variedades')}</span></div>`;
+}
+
+/* ── Controles ──────────────────────────────────────────────────────────── */
+$('selColor').addEventListener('change', e => {
+    modoColor = e.target.value;
+    if (map.getLayer('cuarteles-fill')) map.setPaintProperty('cuarteles-fill', 'fill-color', exprColor());
+    pintarDots();
+});
+
+$('btnTodo').addEventListener('click', () => {
+    Object.keys(COLOR_VARIEDAD).forEach(k => visibles.add(k));
+    aplicarFiltro();
+});
+$('btnNada').addEventListener('click', () => { visibles.clear(); aplicarFiltro(); });
+
+function conmutar(id, fn) { $(id).addEventListener('change', e => fn(e.target.checked)); }
+const vis = (capa, on) => { if (map.getLayer(capa)) map.setLayoutProperty(capa, 'visibility', on ? 'visible' : 'none'); };
+
+conmutar('swRelleno',   on => vis('cuarteles-fill', on));
+conmutar('swContorno',  on => vis('cuarteles-line', on));
+conmutar('swEtiquetas', on => vis('cuarteles-label', on));
+conmutar('swLeyenda',   on => document.body.classList.toggle('legend-off', !on));
+conmutar('swMetricas',  on => { $('statsBar').style.display = on ? 'flex' : 'none'; });
+
+/* Cambiar de base tira las capas con el estilo: hay que volver a montarlas. */
+conmutar('swSatelital', on => {
+    estiloSatelital = on;
+    map.setStyle(on ? ESTILO_SAT : ESTILO_CLARO);   // 'style.load' remonta las capas
+});
+
+$('btnVista').addEventListener('click', () => {
+    const pop = $('popVista'), abierto = !pop.hidden;
+    pop.hidden = abierto;
+    $('btnVista').classList.toggle('abierta', !abierto);
+    $('btnVista').setAttribute('aria-expanded', String(!abierto));
+});
+document.addEventListener('click', e => {
+    if (!e.target.closest('.fc-pop-wrap') && !$('popVista').hidden) {
+        $('popVista').hidden = true;
+        $('btnVista').classList.remove('abierta');
+        $('btnVista').setAttribute('aria-expanded', 'false');
+    }
+});
+
+$('btnEncuadrar').addEventListener('click', () => encuadrar(true));
+function encuadrar(animar) {
+    const b = DATA.bbox;
+    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], {
+        padding: { top: 108, bottom: 60, left: 300, right: 60 },
+        duration: animar ? 800 : 0
+    });
+}
+
+/* ── Búsqueda ───────────────────────────────────────────────────────────── */
+function construirDatalist() {
+    const dl = $('dlCuarteles');
+    dl.innerHTML = DATA.cuarteles.features
+        .map(f => `<option value="${esc(f.properties.cuartel)} — ${esc(f.properties.variedad)}"></option>`)
+        .join('');
+}
+
+$('inpBuscar').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    if (q.length < 2) return;
+    const f = DATA.cuarteles.features.find(x => {
+        const p = x.properties;
+        return (p.cuartel + ' — ' + p.variedad).toLowerCase() === q ||
+               p.cuartel.toLowerCase() === q;
+    });
+    if (!f) return;
+    const k = vkey(f.properties.especie, f.properties.variedad);
+    if (!visibles.has(k)) { visibles.add(k); aplicarFiltro(); }
+    map.flyTo({ center: f.properties.centro, zoom: 16.4, duration: 900 });
+    map.once('moveend', () => {
+        setEstado(fijado, 'fijo', false);
+        fijado = f.properties.uid;
+        setEstado(fijado, 'fijo', true);
+        mostrarFicha(f.properties, map.project(f.properties.centro), true);
+    });
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') desfijar(); });
+</script>
+</body>
+</html>

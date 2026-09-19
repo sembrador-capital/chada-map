@@ -1,0 +1,23 @@
+# ── Credenciales ──────────────────────────────────────────────────────────
+.env
+
+# ── Insumos con detalle comercial ─────────────────────────────────────────
+# Las planillas de cosecha, tasación y el modelo financiero traen detalle que el
+# mapa no muestra y este repo es público. Se versiona el JSON derivado, no la
+# planilla. El KMZ sí va versionado: es la geometría del predio y nada más.
+datos_fuente/
+
+# ── Intermedios del build ─────────────────────────────────────────────────
+tools/_*
+tools/__pycache__/
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ── Sistema operativo ─────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+.DS_Store
