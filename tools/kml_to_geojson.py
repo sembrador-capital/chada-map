@@ -199,10 +199,21 @@ def main():
         esp["variedades"] = sorted(esp["variedades"].values(), key=lambda v: -v["cuarteles"])
         resumen.append(esp)
 
+    # Codigos de cuartel que aparecen en mas de un poligono. No siempre es un
+    # error -8201 y 8209 vienen partidos en A y B a proposito-, pero 5137, 5127
+    # y 5213 son tres paños distintos compartiendo rotulo, y eso hace que el
+    # buscador encuentre uno y se pierda el otro. Se detecta y se avisa; el KMZ
+    # no se corrige desde aca.
+    from collections import Counter
+    veces = Counter(c for f in features for c in f["properties"]["cuarteles"])
+    repetidos = sorted(c for c, n in veces.items() if n > 1 and c.lower() != "arranque")
+    for f in features:
+        f["properties"]["codigo_repetido"] = any(c in repetidos for c in f["properties"]["cuarteles"])
+
     out = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": kmz.name,
-        "farm": {"name": "Hacienda Chada: Huelquen", "operador": "Sembrador Capital"},
+        "farm": {"name": "Hacienda Chada: Huelquén", "operador": "Sembrador Capital"},
         "bbox": bbox,
         "center": [round((bbox[0] + bbox[2]) / 2, 6), round((bbox[1] + bbox[3]) / 2, 6)],
         "totales": {
@@ -211,12 +222,15 @@ def main():
             "variedades": sum(len(e["variedades"]) for e in resumen),
         },
         "por_especie": resumen,
+        "avisos": {"codigos_repetidos": repetidos},
         "cuarteles": {"type": "FeatureCollection", "features": features},
     }
 
     dest = root_dir / "geo_data.json"
     dest.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print("OK %s  cuarteles=%d" % (dest, len(features)))
+    if repetidos:
+        print("  codigos en mas de un poligono: %s" % ", ".join(repetidos))
     for e in resumen:
         print("  %-16s %4d cuarteles  %d variedades" % (e["especie"], e["cuarteles"], len(e["variedades"])))
 

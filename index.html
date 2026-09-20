@@ -307,6 +307,10 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
     color:var(--sem-text-2); cursor:pointer; transition:background 0.15s, color 0.15s;
 }
 .legend-mini:hover { background:var(--sem-beige-wash); color:var(--sem-ink); }
+/* Con ramas apagadas, "Todo" es la salida: se destaca para que se vea que hay
+   algo que deshacer. */
+.legend-mini.destacado { background:var(--sem-navy); border-color:var(--sem-navy); color:var(--sem-surface); }
+.lg-filtro { color:var(--sem-navy); font-weight:600; }
 .legend-body { overflow-y:auto; padding:6px 6px 10px; flex:1; scrollbar-width:thin; }
 
 .lg-esp { margin-bottom:2px; }
@@ -453,6 +457,15 @@ body.panel-abierto .modelo-panel { display:flex; }
 .mapboxgl-ctrl-group button { background-color:var(--sem-surface); }
 .mapboxgl-ctrl-bottom-left { left:296px; }
 body.legend-off .mapboxgl-ctrl-bottom-left { left:0; }
+
+/* Aviso breve, para responder a un clic que si no se quedaría en silencio. */
+.aviso {
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%); z-index:var(--z-tooltip);
+    max-width:min(420px, calc(100vw - 32px)); padding:9px 13px;
+    background:var(--sem-ink); color:var(--sem-surface);
+    border-radius:var(--sem-radius); box-shadow:var(--sem-shadow-lg);
+    font-size:11.5px; line-height:1.4; text-align:center;
+}
 
 .data-stamp {
     position:absolute; bottom:20px; right:16px; z-index:var(--z-legend);
@@ -645,6 +658,7 @@ body.panel-abierto .data-stamp { right:408px; }
 </div>
 
 <div class="card" id="card" role="dialog" aria-live="polite"></div>
+<div class="aviso" id="aviso" role="status" aria-live="polite" hidden></div>
 <div class="data-stamp" id="dataStamp"></div>
 
 <script>
@@ -850,10 +864,16 @@ map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-l
 map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
 map.addControl(new mapboxgl.ScaleControl({ maxWidth: 90, unit: 'metric' }), 'bottom-left');
 
-Promise.all([
-    fetch('geo_data.json').then(r => { if (!r.ok) throw new Error('geo_data.json ' + r.status); return r.json(); }),
-    fetch('modelo_data.json').then(r => { if (!r.ok) throw new Error('modelo_data.json ' + r.status); return r.json(); })
-]).then(([geo, mod]) => {
+/* cache:'no-cache' obliga a revalidar contra el servidor en cada carga: la
+   respuesta sigue siendo un 304 barato mientras el archivo no cambie, pero
+   cuando se regeneran los datos el mapa los toma de inmediato. Sin esto el
+   navegador servía el JSON viejo y no había forma de notarlo desde la
+   pantalla: los números seguían siendo coherentes entre sí, sólo que de la
+   corrida anterior. */
+const traer = nombre => fetch(nombre, { cache: 'no-cache' })
+    .then(r => { if (!r.ok) throw new Error(nombre + ' ' + r.status); return r.json(); });
+
+Promise.all([traer('geo_data.json'), traer('modelo_data.json')]).then(([geo, mod]) => {
     GEO = geo; MOD = mod;
     MOD.variedades.forEach(v => { MIDX[vkey(v.especie, v.variedad)] = v; });
     // Hasta plena producción y nada más: de ahí en adelante las diecisiete
@@ -1326,7 +1346,7 @@ function construirLeyenda() {
         });
     });
 
-    $('legendSub').textContent = MOD.variedades.length + ' variedades · ' + nf(MOD.totales.ha, 2) + ' ha';
+    actualizarSubLeyenda();
 }
 
 /* Los puntos siguen al modo: si el mapa está pintado por especie o por una
@@ -1347,6 +1367,14 @@ function pintarDots() {
     });
 }
 
+function actualizarSubLeyenda() {
+    const apagadas = Object.keys(MODELOS_DE_VKEY).length - visibles.size;
+    $('legendSub').innerHTML = apagadas
+        ? `<b class="lg-filtro">${apagadas} ${apagadas === 1 ? 'rama apagada' : 'ramas apagadas'}</b> · toca «Todo» para verlas`
+        : MOD.variedades.length + ' variedades · ' + nf(MOD.totales.ha, 2) + ' ha';
+    $('btnTodo').classList.toggle('destacado', apagadas > 0);
+}
+
 function pintarLeyenda() {
     document.querySelectorAll('.lg-vars .lg-row').forEach(row => {
         row.classList.toggle('off', !visibles.has(row.dataset.vkey));
@@ -1355,6 +1383,7 @@ function pintarLeyenda() {
         const keys = [...esp.querySelectorAll('.lg-vars .lg-row')].map(r => r.dataset.vkey);
         esp.querySelector('.lg-esp-row').classList.toggle('off', !keys.some(k => visibles.has(k)));
     });
+    actualizarSubLeyenda();
 }
 
 function pintarEscala() {
@@ -1438,11 +1467,17 @@ function pintarMetricas() {
     const regs = clavesVisibles(), a = agregado(regs, t);
     const cuarteles = GEO.cuarteles.features.filter(f => visibles.has(vkey(f.properties.especie, f.properties.variedad))).length;
     const plural = (n, s, p) => n === 1 ? s : p;
-    const parcial = a.ha && a.ha < MOD.totales.ha ? ` · ${Math.round(a.ha / MOD.totales.ha * 100)}%` : '';
+    // Con el árbol filtrado, el titular no es la superficie del predio. En vez
+    // de mostrar un número suelto que obliga a preguntarse de dónde salió, la
+    // etiqueta dice contra qué se está comparando.
+    const filtrado = a.ha > 0 && a.ha < MOD.totales.ha - 0.005;
+    const etiquetaHa = filtrado
+        ? `de ${nf(MOD.totales.ha, 1)} ha · ${Math.round(a.ha / MOD.totales.ha * 100)}%`
+        : 'Hectáreas';
 
     if (modo === 'general') {
         $('statsBar').innerHTML = `
-            <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">Hectáreas${parcial}</span></div>
+            <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">${etiquetaHa}</span></div>
             <div class="stat"><span class="stat-val">${cuarteles}</span><span class="stat-lbl">${plural(cuarteles, 'Cuartel', 'Cuarteles')}</span></div>
             <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
         return;
@@ -1483,14 +1518,14 @@ function pintarMetricas() {
     }
     if (modo === 'produccion') {
         $('statsBar').innerHTML = `
-            <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">Hectáreas${parcial}</span></div>
+            <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">${etiquetaHa}</span></div>
             <div class="stat"><span class="stat-val">${nf(a.kg / 1000, 0)}</span><span class="stat-lbl">Toneladas</span></div>
             <div class="stat"><span class="stat-val">${miles(a.ha ? a.kg / a.ha : null)}</span><span class="stat-lbl">kg / ha</span></div>
             <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
         return;
     }
     $('statsBar').innerHTML = `
-        <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">Hectáreas${parcial}</span></div>
+        <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">${etiquetaHa}</span></div>
         <div class="stat"><span class="stat-val">${miles(a.ingresos)}</span><span class="stat-lbl">Ingresos US$</span></div>
         <div class="stat"><span class="stat-val">${miles(a.costos)}</span><span class="stat-lbl">Costos US$</span></div>
         <div class="stat"><span class="stat-val${a.ebitda < 0 ? ' neg' : ''}">${miles(a.ebitda)}</span><span class="stat-lbl">EBITDA US$</span></div>
@@ -1521,13 +1556,19 @@ const cuartelesVisibles = () => GEO.cuarteles.features
 /* Agregado por especie del KMZ, con las hectáreas del modelo. */
 function porEspecieVisible() {
     const out = {};
+    const nuevo = esp => out[esp] || (out[esp] = {
+        especie: esp, cuarteles: 0, claves: new Set(), pend: [], elev: [], prof: []
+    });
+    // Las hectáreas salen de las ramas encendidas, incluidas las que el modelo
+    // tiene y el KMZ no dibuja. Contarlas desde los polígonos dejaba fuera esas
+    // 3,4 ha y la tabla sumaba 288,83 mientras la barra decía 292,23.
+    visibles.forEach(k => (MODELOS_DE_VKEY[k] || []).forEach(m =>
+        nuevo(k.slice(0, k.indexOf('|'))).claves.add(m)));
+    // Los cuarteles, la pendiente y el suelo sí son del polígono: son lo que se
+    // midió sobre el terreno dibujado.
     cuartelesVisibles().forEach(p => {
-        const e = out[p.especie] || (out[p.especie] = {
-            especie: p.especie, cuarteles: 0, claves: new Set(),
-            pend: [], elev: [], prof: []
-        });
+        const e = nuevo(p.especie);
         e.cuarteles++;
-        arr(p.modelo).forEach(k => e.claves.add(k));
         if (p.pendiente != null) { e.pend.push(p.pendiente); e.elev.push(p.elev); }
         const su = obj(p.suelo);
         if (su) e.prof.push(su.prof_cm);
@@ -1684,6 +1725,13 @@ function pintarConciliacion() {
         partes.push('<div class="mp-aviso"><b>Sin polígono en el KMZ.</b> ' + av.variedades_sin_cuartel.map(esc).join(' y ') +
             ' están en el modelo pero no tienen cuartel dibujado: suman en los totales y no se pintan.</div>');
     }
+    const rep = (GEO.avisos || {}).codigos_repetidos || [];
+    if (rep.length) {
+        partes.push('<div class="mp-aviso"><b>Códigos repetidos en el KMZ.</b> ' + rep.map(esc).join(', ') +
+            ' aparecen en más de un polígono. En <b>8201</b> y <b>8209</b> es a propósito —vienen partidos en A y B—, ' +
+            'pero <b>5127</b>, <b>5137</b> y <b>5213</b> son paños distintos con el mismo rótulo, y <b>5213</b> además ' +
+            'cubre dos variedades (Cara Cara y Fukumoto). El buscador los desempata con el ID interno.</div>');
+    }
     if (GEO.suelos) {
         const g = GEO.suelos.georreferencia;
         partes.push('<div class="mp-aviso"><b>Suelos, cómo se cruzó.</b> El plano no viene georreferenciado: se ajustó con ' +
@@ -1695,7 +1743,12 @@ function pintarConciliacion() {
 
 function volarAVariedad(clave) {
     const feats = GEO.cuarteles.features.filter(f => (f.properties.modelo || []).includes(clave));
-    if (!feats.length) return;
+    if (!feats.length) {
+        // Red Globe y Lapins Injerto suman en los totales pero no tienen paño
+        // dibujado. Un clic que no hace nada se lee como que la app falló.
+        avisar('Sin polígono en el KMZ: esta variedad suma en los totales pero no se puede mostrar en el mapa.');
+        return;
+    }
     const lons = feats.map(f => f.properties.centro[0]), lats = feats.map(f => f.properties.centro[1]);
     map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
         { padding: relleno(), maxZoom: 16.5, duration: 800 });
@@ -2085,17 +2138,38 @@ function encuadrar(animar) {
 }
 
 /* ── Búsqueda ───────────────────────────────────────────────────────────── */
+/* Cinco códigos aparecen en más de un polígono (5127, 5137, 5213, 8201, 8209).
+   Si la sugerencia fuera sólo «código — variedad», dos paños distintos darían la
+   misma línea y el buscador se quedaría siempre con el primero. El ID interno
+   desempata, y sólo aparece donde hace falta. */
 function construirDatalist() {
-    $('dlCuarteles').innerHTML = GEO.cuarteles.features
-        .map(f => `<option value="${esc(f.properties.cuartel)} — ${esc(f.properties.variedad)}"></option>`).join('');
+    const repetidos = new Set((GEO.avisos || {}).codigos_repetidos || []);
+    $('dlCuarteles').innerHTML = GEO.cuarteles.features.map(f => {
+        const p = f.properties;
+        const choca = p.cuarteles.some(c => repetidos.has(c));
+        return `<option value="${esc(etiquetaBusqueda(p))}"${choca ? ` label="${esc(p.uid)}"` : ''}></option>`;
+    }).join('');
 }
+
+const etiquetaBusqueda = p => {
+    const repetidos = new Set((GEO.avisos || {}).codigos_repetidos || []);
+    const choca = p.cuarteles.some(c => repetidos.has(c));
+    return p.cuartel + ' — ' + p.variedad + (choca ? ' · ' + p.uid : '');
+};
+
 $('inpBuscar').addEventListener('input', e => {
     const q = e.target.value.trim().toLowerCase();
     if (q.length < 2) return;
-    const f = GEO.cuarteles.features.find(x => {
-        const p = x.properties;
-        return (p.cuartel + ' — ' + p.variedad).toLowerCase() === q || p.cuartel.toLowerCase() === q;
-    });
+    const norm = x => x.toLowerCase();
+    const candidatos = GEO.cuarteles.features;
+    // Primero el calce exacto de la sugerencia; después el código completo; y
+    // recién ahí un prefijo, para que escribir «5218» sin el sufijo igual lleve
+    // a alguna parte en vez de no hacer nada.
+    const f = candidatos.find(x => norm(etiquetaBusqueda(x.properties)) === q)
+        || candidatos.find(x => norm(x.properties.cuartel) === q)
+        || candidatos.find(x => x.properties.cuarteles.some(c => norm(c) === q))
+        || candidatos.find(x => norm(x.properties.cuartel).startsWith(q))
+        || candidatos.find(x => norm(x.properties.variedad).startsWith(q));
     if (!f) return;
     const k = vkey(f.properties.especie, f.properties.variedad);
     if (!visibles.has(k)) { visibles.add(k); aplicarFiltro(); }
@@ -2106,6 +2180,15 @@ $('inpBuscar').addEventListener('input', e => {
         mostrarFicha(f.properties, map.project(f.properties.centro), true);
     });
 });
+
+let relojAviso = null;
+function avisar(texto) {
+    const a = $('aviso');
+    a.textContent = texto;
+    a.hidden = false;
+    clearTimeout(relojAviso);
+    relojAviso = setTimeout(() => { a.hidden = true; }, 4200);
+}
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') desfijar(); });
 </script>

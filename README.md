@@ -169,6 +169,24 @@ que dice el relieve: pendiente o elevación, desde el DEM. Son el mismo cuartel
 mirado de dos maneras, no dos pestañas del predio, y ninguna de las dos cambia
 con la temporada.
 
+### Un solo número por cosa
+
+Cuando el árbol de la leyenda tiene ramas apagadas, el titular deja de ser la
+superficie del predio, y eso tiene que verse: la barra de métricas pasa de decir
+«292,2 · Hectáreas» a «279,4 · de 292,2 ha · 96%», la cabecera de la leyenda
+avisa cuántas ramas están apagadas y el botón «Todo» se destaca como salida. Sin
+eso, un filtro puesto sin querer sólo se manifiesta como un total que no cuadra.
+
+Las hectáreas de la tabla del panel salen de las mismas ramas encendidas que la
+barra de métricas. Contarlas desde los polígonos dejaba fuera las 3,4 ha de las
+dos variedades sin paño dibujado, y la misma pantalla mostraba 288,83 arriba y
+292,23 al lado.
+
+Los dos JSON se piden con `cache: 'no-cache'`. La respuesta sigue siendo un 304
+barato mientras el archivo no cambie, pero sin eso el navegador servía los datos
+de la corrida anterior y no había manera de notarlo desde la pantalla: los
+números seguían siendo coherentes entre sí, sólo que viejos.
+
 ### Cada pantalla muestra lo suyo
 
 La regla es que nada se diga dos veces. Los números de cabecera viven en la barra
@@ -230,8 +248,15 @@ usa la serie despejada. Las otras 29 variedades calzan dentro del 2%.
 (2,94 ha) y `Lapins Injerto` (0,46 ha). Aparecen igual en el árbol de la leyenda,
 en cursiva y con el punto hueco, y suman en los totales: por eso el mapa
 encendido entero dice 292,23 ha y no 288,83. Lo que no pueden es pintarse, porque
-no hay polígono que pintar. Si aparecen en una versión futura del KMZ, se cruzan
-solas por el nombre.
+no hay polígono que pintar; al hacerles clic en la tabla el mapa lo dice en vez
+de quedarse quieto. Si aparecen en una versión futura del KMZ, se cruzan solas
+por el nombre.
+
+**3. Cinco códigos de cuartel aparecen en más de un polígono.** En `8201` y
+`8209` es a propósito —vienen partidos en A y B—, pero `5127`, `5137` y `5213`
+son paños distintos con el mismo rótulo, y `5213` además cubre dos variedades
+(Cara Cara y Fukumoto). El buscador los desempata con el ID interno y el panel
+lo anota.
 
 Hay además **un cruce aproximado**: el cuartel 8205 va rotulado `Cheery Moon` en
 el KMZ y el modelo no tiene esa variedad; tiene `Cheery Treat Injerto.`, que en
