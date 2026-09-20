@@ -168,7 +168,8 @@ use[href^="#ic-"] { stroke:currentColor; }
 /* ── COMPONENTE 2 · Controles ───────────────────────────────────────────── */
 .controls {
     position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:var(--z-controls);
-    padding:7px 11px; display:flex; gap:8px; align-items:center;
+    padding:7px 11px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    justify-content:center;
     background:var(--sem-surface); border:var(--sem-border-hair);
     border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-md);
     transition:left 0.2s ease;
@@ -195,6 +196,20 @@ body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
 .fc-select:hover, .fc-search:hover { border:var(--sem-border-strong); }
 .fc-select:focus, .fc-search:focus { border:var(--sem-border-accent); box-shadow:var(--sem-focus-ring); }
 .fc-divider { width:1px; align-self:stretch; background:var(--sem-line); margin:0 2px; }
+
+/* Control segmentado: dos caras de un mismo dato -lo que dice el plano y lo
+   que dice el relieve-, que no son dos pestañas del predio sino dos maneras de
+   mirar el suelo. */
+.seg { display:flex; height:29px; border:var(--sem-border-hair); border-radius:var(--sem-radius); overflow:hidden; }
+.seg button {
+    padding:0 11px; border:none; background:var(--sem-surface); cursor:pointer;
+    font-family:inherit; font-size:11.5px; font-weight:400; color:var(--sem-text-2);
+    white-space:nowrap; transition:background 0.15s, color 0.15s;
+}
+.seg button + button { border-left:var(--sem-border-hair); }
+.seg button:hover { background:var(--sem-beige-wash); color:var(--sem-ink); }
+.seg button.activo { background:var(--sem-navy); color:var(--sem-surface); font-weight:500; }
+.seg button:focus-visible { outline:none; box-shadow:var(--sem-focus-ring); }
 
 .fc-btn {
     align-self:flex-end; height:29px; padding:0 11px;
@@ -457,7 +472,12 @@ body.panel-abierto .data-stamp { right:408px; }
 @media (max-width:1180px) {
     body.panel-abierto #map { right:0; }
     .modelo-panel { box-shadow:var(--sem-shadow-lg); }
-    body.panel-abierto .tabs, body.panel-abierto .controls { left:50%; }
+    /* El panel se monta encima del mapa, así que el centro de la zona visible
+       sigue siendo el mismo que arriba de 1180 px. Centrar en el viewport
+       metía las pestañas y los controles debajo del panel. */
+    body.panel-abierto .tabs, body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
+    body.panel-abierto .tabs { max-width:calc(100% - 424px); }
+    body.panel-abierto .controls { max-width:calc(100% - 424px); }
     body.panel-abierto .stats-bar, body.panel-abierto .data-stamp { right:408px; }
 }
 @media (max-width:900px) {
@@ -503,8 +523,7 @@ body.panel-abierto .data-stamp { right:408px; }
     <button class="tab-btn active" data-modo="general"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-mapa"/></svg></span><span>Vista general</span></button>
     <button class="tab-btn" data-modo="produccion" title="Rendimiento por hectárea según el modelo"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-barras"/></svg></span><span>Producción</span></button>
     <button class="tab-btn" data-modo="financiero" title="EBITDA, ingresos y costos por hectárea"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-billete"/></svg></span><span>Financiero</span></button>
-    <button class="tab-btn" data-modo="terreno" title="Pendiente y elevación desde el modelo de elevación"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-cerro"/></svg></span><span>Terreno</span></button>
-    <button class="tab-btn" data-modo="suelos" title="Tipos de suelo del plano de la hacienda"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-suelo"/></svg></span><span>Suelos</span></button>
+    <button class="tab-btn" data-modo="suelos" title="Tipo de suelo del plano y relieve del terreno"><span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-suelo"/></svg></span><span>Suelos</span></button>
 </div>
 
 <div class="controls">
@@ -519,9 +538,12 @@ body.panel-abierto .data-stamp { right:408px; }
         <label class="fc-label" for="selMetrica">Métrica</label>
         <select class="fc-select" id="selMetrica"></select>
     </div>
-    <div class="fc-group" id="grpTerreno" hidden>
-        <label class="fc-label" for="selTerreno">Variable</label>
-        <select class="fc-select" id="selTerreno"></select>
+    <div class="fc-group" id="grpSubSuelo" hidden>
+        <label class="fc-label">Ver</label>
+        <div class="seg" id="segSuelo" role="group" aria-label="Qué mirar del suelo">
+            <button type="button" data-sub="fisico" class="activo">Tipo de suelo (físico)</button>
+            <button type="button" data-sub="terreno">Terreno</button>
+        </div>
     </div>
     <div class="fc-group" id="grpSuelo" hidden>
         <label class="fc-label" for="selSuelo">Variable</label>
@@ -537,8 +559,8 @@ body.panel-abierto .data-stamp { right:408px; }
         <datalist id="dlCuarteles"></datalist>
     </div>
     <div class="fc-divider" aria-hidden="true"></div>
-    <button type="button" class="fc-btn" id="btnPanel" title="Resumen del modelo financiero">
-        <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-informe"/></svg></span><span>Modelo</span>
+    <button type="button" class="fc-btn" id="btnPanel" title="Panel de datos del modo activo">
+        <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-informe"/></svg></span><span>Datos</span>
     </button>
     <div class="fc-pop-wrap">
         <button type="button" class="fc-btn" id="btnVista" aria-haspopup="true" aria-expanded="false" aria-controls="popVista" title="Capas y encuadre">
@@ -592,7 +614,7 @@ body.panel-abierto .data-stamp { right:408px; }
 <div class="modelo-panel" id="modeloPanel">
     <div class="mp-head">
         <div>
-            <div class="mp-title" id="mpTitulo">Modelo</div>
+            <div class="mp-title" id="mpTitulo">Datos</div>
             <div class="mp-sub" id="mpSub"></div>
         </div>
         <button type="button" class="card-close" style="display:flex; position:static" id="mpCerrar" aria-label="Cerrar panel">
@@ -770,9 +792,11 @@ const ESCALAS = {
     }
 };
 const METRICAS_FIN = ['ebitda_ha', 'ingreso_ha', 'costo_ha', 'margen'];
-const METRICAS_TERRENO = ['pendiente', 'elev'];
-/* "clase" no es una escala: es la simbología del plano tal cual. */
-const METRICAS_SUELO = ['clase', 'suelo_prof'];
+/* Suelos tiene dos caras y se abre por una subpestaña. La física es lo que
+   dice el plano de la hacienda; el terreno es lo que dice el relieve. Son el
+   mismo cuartel mirado de dos maneras, no dos pestañas del predio.
+   "clase" no es una escala: es la simbología del plano tal cual. */
+const METRICAS_SUELO = { fisico: ['clase', 'suelo_prof'], terreno: ['pendiente', 'elev'] };
 
 /* ── Estado ─────────────────────────────────────────────────────────────── */
 let GEO = null, MOD = null;
@@ -784,20 +808,24 @@ let COLOR_ESPECIE = {};        // especie del KMZ -> hex
 let COLOR_VARIEDAD = {};       // vkey del KMZ    -> hex
 let HA_ESPECIE = {}, HA_VKEY = {};   // hectáreas del modelo, agregadas al KMZ
 const visibles = new Set();
-let modo = 'general', modoColor = 'variedad', metrica = 'ebitda_ha', metricaTerreno = 'pendiente', metricaSuelo = 'clase', t = 3;
+let modo = 'general', modoColor = 'variedad', metrica = 'ebitda_ha', t = 3;
+let subSuelo = 'fisico', metricaSuelo = 'clase';
 let SUELO = {};                // clase -> entrada de la simbología del plano
 let UTILES = 1;                // temporadas hasta plena producción, inclusive
 let vistaGrafico = 'serie', ordenTabla = { campo: 'ebitda_ha', asc: false };
 let fijado = null, hoverId = null, estiloSatelital = true, grafico = null, relieve = false;
 
+/* Dentro de Suelos, qué cara se está mirando. */
+const verTerreno = () => modo === 'suelos' && subSuelo === 'terreno';
+const verFisico  = () => modo === 'suelos' && subSuelo === 'fisico';
+
 const escalaActiva = () => modo === 'produccion' ? ESCALAS.rend_kg_ha
-    : modo === 'terreno' ? ESCALAS[metricaTerreno]
     : modo === 'suelos' ? ESCALAS[metricaSuelo] : ESCALAS[metrica];
 
 /* El terreno viene del DEM y el suelo del plano: los dos van escritos en el
    propio cuartel y no se ponderan ni se cruzan con el modelo. */
-const valorPintado = p => modo === 'terreno' ? (p[metricaTerreno] ?? null)
-    : modo === 'suelos' ? ((obj(p.suelo) || {}).prof_cm ?? null)
+const valorPintado = p => verTerreno() ? (p[metricaSuelo] ?? null)
+    : verFisico() ? ((obj(p.suelo) || {}).prof_cm ?? null)
     : valorCuartel(p, modo === 'produccion' ? 'rend_kg_ha' : metrica, t);
 
 /* El color de un cuartel: identidad, simbología del plano o clase de escala. */
@@ -806,7 +834,7 @@ function colorCuartel(p) {
         return (modoColor === 'especie' ? COLOR_ESPECIE[p.especie]
             : COLOR_VARIEDAD[vkey(p.especie, p.variedad)]) || css('--dat-sindato');
     }
-    if (modo === 'suelos' && metricaSuelo === 'clase') {
+    if (verFisico() && metricaSuelo === 'clase') {
         const s = obj(p.suelo);
         return s && SUELO[s.clase] ? SUELO[s.clase].color : css('--dat-sindato');
     }
@@ -1057,23 +1085,23 @@ function inicializar() {
     encuadrar(false);
     $('loader').hidden = true;
 
-    // El canvas de Mapbox se redimensiona cuando el contenedor cambia de
-    // tamaño, no cuando se lo pedimos. Al cerrar el panel, #map anima su ancho
-    // durante 200 ms: un map.resize() inmediato medía el ancho de la mitad de
-    // la animación y el canvas quedaba angosto, dejando una franja muerta a la
-    // derecha hasta que alguien movía la ventana. El observador lo resuelve
-    // para todos los casos, incluida la ventana del navegador.
-    // El resize va diferido a un frame: hacerlo dentro del propio callback
-    // cambia el tamaño del canvas, que está DENTRO del elemento observado, y el
-    // navegador corta la notificación para no entrar en bucle. Diferido, el
-    // observador cubre todos los casos: abrir y cerrar el panel, la transición
-    // de 200 ms y el redimensionado de la ventana.
-    let pendiente = false;
-    new ResizeObserver(() => {
-        if (pendiente) return;
-        pendiente = true;
-        requestAnimationFrame(() => { pendiente = false; map.resize(); });
+    // Redimensionar el canvas cuando cambia el contenedor. Va SÍNCRONO, no en
+    // requestAnimationFrame: si la pestaña no está pintando esos frames no
+    // llegan y el canvas se queda con el ancho viejo, dejando una franja muerta
+    // a la derecha. La guarda por ancho evita el bucle -cambiar el canvas, que
+    // es hijo de #map, no altera el contentRect del padre, pero más vale no
+    // depender de eso-.
+    let anchoPrevio = 0;
+    new ResizeObserver(entradas => {
+        const ancho = Math.round(entradas[0].contentRect.width);
+        if (ancho === anchoPrevio) return;
+        anchoPrevio = ancho;
+        map.resize();
+        acomodarLeyenda();
     }).observe($('map'));
+    // El observador sólo mira el mapa; la barra de controles también reordena
+    // sus filas cuando cambia el ancho de la ventana sin que el mapa cambie.
+    window.addEventListener('resize', acomodarLeyenda);
 
     map.on('mousemove', 'cuarteles-fill', onHover);
     map.on('mouseleave', 'cuarteles-fill', onLeave);
@@ -1181,7 +1209,7 @@ function mostrarFicha(p, punto, fija = false) {
             : '';
         if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
 
-    } else if (modo === 'terreno') {
+    } else if (verTerreno()) {
         cuerpo =
             kv('Pendiente', nf(p.pendiente, 1) + '% · ' + esc(p.pendiente_clase)) +
             kv('Pendiente p90', nf(p.pendiente_p90, 1) + '%') +
@@ -1189,7 +1217,7 @@ function mostrarFicha(p, punto, fija = false) {
             kv('Rango', miles(p.elev_min) + '–' + miles(p.elev_max) + ' m') +
             kv('Exposición', esc(p.exposicion || '—'));
 
-    } else if (modo === 'suelos') {
+    } else if (verFisico()) {
         cuerpo = su
             ? kv('Tipo', esc((SUELO[su.clase] || {}).nombre || su.clase)) +
               kv('Textura', esc(su.textura)) +
@@ -1336,7 +1364,7 @@ function pintarEscala() {
     // El tipo de suelo no es una escala continua: es la simbología del plano,
     // categórica, y se lista con su descripción. Los colores son los del plano
     // original, no una paleta nuestra: el que conoce el papel reconoce el mapa.
-    if (modo === 'suelos' && metricaSuelo === 'clase') {
+    if (verFisico() && metricaSuelo === 'clase') {
         const usados = {};
         GEO.cuarteles.features.forEach(f => {
             const s = f.properties.suelo;
@@ -1419,7 +1447,7 @@ function pintarMetricas() {
             <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
         return;
     }
-    if (modo === 'suelos') {
+    if (verFisico()) {
         const conSuelo = GEO.cuarteles.features.map(f => f.properties)
             .filter(p => visibles.has(vkey(p.especie, p.variedad)) && p.suelo);
         const tipos = new Set(conSuelo.map(p => p.suelo.clase));
@@ -1432,7 +1460,7 @@ function pintarMetricas() {
             <div class="stat"><span class="stat-val">${conSuelo.length}</span><span class="stat-lbl">${plural(conSuelo.length, 'Cuartel', 'Cuarteles')}</span></div>`;
         return;
     }
-    if (modo === 'terreno') {
+    if (verTerreno()) {
         // El terreno se resume sobre los cuarteles dibujados, no sobre las
         // variedades: aquí la unidad es el polígono, y la pendiente se pondera
         // por superficie del modelo para que un paño de 0,4 ha no pese igual
@@ -1476,9 +1504,11 @@ function pintarMetricas() {
    muerta a la derecha del mapa. Cada modo trae su gráfico y su tabla. */
 
 const TITULO_PANEL = {
-    general: 'Composición del predio', produccion: 'Producción',
-    financiero: 'Financiero', terreno: 'Terreno', suelos: 'Suelos'
+    general: 'Composición del predio', produccion: 'Producción', financiero: 'Financiero'
 };
+const tituloPanel = () => modo === 'suelos'
+    ? (subSuelo === 'terreno' ? 'Terreno' : 'Tipo de suelo')
+    : (TITULO_PANEL[modo] || 'Datos');
 
 /* Los cuarteles dibujados de las ramas encendidas. Terreno y suelo se miden
    por cuartel -el DEM y el plano clasifican polígonos, no variedades-, así que
@@ -1513,7 +1543,7 @@ function porEspecieVisible() {
 function pintarPanel() {
     if (!document.body.classList.contains('panel-abierto')) return;
     const regs = clavesVisibles();
-    $('mpTitulo').textContent = TITULO_PANEL[modo] || 'Modelo';
+    $('mpTitulo').textContent = tituloPanel();
     // Sólo la temporada, y sólo donde la hay: las hectáreas encendidas ya están
     // en la barra de métricas.
     $('mpSub').textContent = (modo === 'produccion' || modo === 'financiero')
@@ -1528,8 +1558,8 @@ function pintarPanel() {
 
 /* ── Tabla ───────────────────────────────────────────────────────────────── */
 function pintarTabla(regs) {
-    if (modo === 'general' || modo === 'terreno') return tablaEspecies();
-    if (modo === 'suelos') return tablaSuelos();
+    if (modo === 'general' || verTerreno()) return tablaEspecies();
+    if (verFisico()) return tablaSuelos();
     return tablaVariedades(regs);
 }
 
@@ -1554,7 +1584,7 @@ function ordenarPor(lista, campo, texto) {
 }
 
 function tablaEspecies() {
-    const terreno = modo === 'terreno';
+    const terreno = verTerreno();
     const cols = terreno
         ? [{ k: 'especie', t: 'Especie' }, { k: 'ha', t: 'ha' },
            { k: 'pendiente', t: 'Pendiente' }, { k: 'elevacion', t: 'Elev. m' }]
@@ -1792,7 +1822,7 @@ function dibujarGrafico(regs) {
         return;
     }
 
-    if (modo === 'terreno') {
+    if (verTerreno()) {
         // El reparto se cuenta en cuarteles: el DEM clasifica polígonos, y
         // repartir las hectáreas de una variedad entre sus cuarteles exigiría
         // un supuesto de superficie que no tenemos.
@@ -1811,7 +1841,7 @@ function dibujarGrafico(regs) {
         return;
     }
 
-    if (modo === 'suelos') {
+    if (verFisico()) {
         const cuenta = {};
         cuartelesVisibles().forEach(p => {
             const su = obj(p.suelo);
@@ -1929,9 +1959,7 @@ function construirSelectores() {
         `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === UTILES - 1 ? ' · plena producción' : ''}</option>`).join('');
     $('selMetrica').innerHTML = METRICAS_FIN.map(m =>
         `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`).join('');
-    $('selTerreno').innerHTML = METRICAS_TERRENO.map(m =>
-        `<option value="${m}"${m === metricaTerreno ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`).join('');
-    $('selSuelo').innerHTML = METRICAS_SUELO.map(m =>
+    $('selSuelo').innerHTML = METRICAS_SUELO[subSuelo].map(m =>
         `<option value="${m}"${m === metricaSuelo ? ' selected' : ''}>${
             esc(m === 'clase' ? 'Tipo de suelo' : ESCALAS[m].etiqueta)}</option>`).join('');
 }
@@ -1940,17 +1968,30 @@ function construirSelectores() {
    arranque también lo necesita: al cargar, la pestaña activa es Vista general y
    nadie ha hecho clic, así que sin esto el botón Modelo quedaba visible y abría
    un panel financiero vacío. */
+/* La barra de controles envuelve cuando el mapa se estrecha, y al ganar una
+   segunda fila se monta sobre el panel de leyenda, que arranca a la misma
+   altura. En vez de fijar un tope a ojo -que se queda corto o sobra según el
+   modo, porque cada uno trae distintos controles- se miden los dos y sólo se
+   baja la leyenda cuando de verdad se pisan. */
+function acomodarLeyenda() {
+    const leyenda = $('legend'), controles = document.querySelector('.controls');
+    leyenda.style.top = '';
+    const c = controles.getBoundingClientRect(), l = leyenda.getBoundingClientRect();
+    if (c.left < l.right + 8 && c.bottom > l.top) leyenda.style.top = Math.round(c.bottom + 8) + 'px';
+}
+
 function sincronizarControles() {
     const conTemporada = modo === 'produccion' || modo === 'financiero';
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
     document.body.classList.toggle('modo-dato', modo !== 'general');
     $('grpColor').hidden = modo !== 'general';
     $('grpMetrica').hidden = modo !== 'financiero';
-    $('grpTerreno').hidden = modo !== 'terreno';
+    $('grpSubSuelo').hidden = modo !== 'suelos';
     $('grpSuelo').hidden = modo !== 'suelos';
     // El terreno y el suelo no cambian con la temporada: el selector sugeriría
     // que la pendiente se mueve entre 2025 y 2029.
     $('grpTemporada').hidden = !conTemporada;
+    acomodarLeyenda();
 }
 
 function cambiarModo(nuevo) {
@@ -1963,16 +2004,23 @@ function togglePanel(abrir) {
     document.body.classList.toggle('panel-abierto', abrir);
     $('btnPanel').classList.toggle('abierta', abrir);
     if (abrir) pintarPanel();
-    // El ajuste fino del canvas lo hace el ResizeObserver cuando el contenedor
-    // termina de animar; éste es sólo para que el mapa reaccione de inmediato.
     map.resize();
+    acomodarLeyenda();
 }
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => cambiarModo(b.dataset.modo)));
 $('selColor').addEventListener('change', e => { modoColor = e.target.value; repintar(); });
 $('selMetrica').addEventListener('change', e => { metrica = e.target.value; repintar(); });
-$('selTerreno').addEventListener('change', e => { metricaTerreno = e.target.value; repintar(); });
 $('selSuelo').addEventListener('change', e => { metricaSuelo = e.target.value; repintar(); });
+$('segSuelo').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    subSuelo = b.dataset.sub;
+    // Cada cara arranca en su primera variable: dejar seleccionada una del otro
+    // grupo dejaría el selector mostrando algo que ya no existe.
+    metricaSuelo = METRICAS_SUELO[subSuelo][0];
+    $('segSuelo').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
+    construirSelectores();
+    repintar();
+}));
 $('selTemporada').addEventListener('change', e => { t = +e.target.value; repintar(); if (fijado) desfijar(); });
 $('btnPanel').addEventListener('click', () => togglePanel(!document.body.classList.contains('panel-abierto')));
 $('mpCerrar').addEventListener('click', () => togglePanel(false));

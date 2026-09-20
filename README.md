@@ -150,7 +150,7 @@ etiqueta de cuartel y filtro por rama.
 
 ## Qué muestra
 
-Cinco modos, con la misma leyenda-árbol para encender y apagar cualquier rama.
+Cuatro pestañas, con la misma leyenda-árbol para encender y apagar cualquier rama.
 
 **Vista general** — identidad. Colorea por especie (siete tonos) o por variedad
 (el tono de su especie, escalonado en luminosidad). El mapa se lee primero por
@@ -162,11 +162,12 @@ especie y después por variedad.
 temporada. EBITDA y margen usan una escala divergente en torno a cero: rojo bajo
 cero, azul sobre cero.
 
-**Terreno** — pendiente o elevación, desde el DEM. Sin selector de temporada: el
-cerro no cambia entre 2025 y 2046.
-
-**Suelos** — tipo de suelo, con la simbología del plano, o profundidad del primer
-horizonte en una rampa ordinal propia.
+**Suelos** — se abre por dos caras, en una subpestaña. *Tipo de suelo (físico)*
+trae lo que dice el plano de la hacienda: el tipo, con su simbología, o la
+profundidad del primer horizonte en una rampa ordinal propia. *Terreno* trae lo
+que dice el relieve: pendiente o elevación, desde el DEM. Son el mismo cuartel
+mirado de dos maneras, no dos pestañas del predio, y ninguna de las dos cambia
+con la temporada.
 
 ### Cada pantalla muestra lo suyo
 
@@ -181,11 +182,14 @@ margen en Financiero, pendiente y exposición en Terreno, tipo y textura en
 Suelos. Antes apilaba los cinco bloques en todos los modos y llenaba media
 pantalla con datos que nadie había pedido.
 
-**El panel** se abre sólo en Producción y Financiero —fuera de ahí el botón
-abría un panel vacío— y trae dos cosas: un gráfico con vista por temporada y
-vista por variedad, y la tabla ordenable, cuyas columnas también cambian con el
-modo: kg/ha y toneladas en Producción; costo/ha, EBITDA/ha y margen en
-Financiero. La conciliación de superficie y los avisos de calidad quedan en una
+**El panel** —el botón *Datos*— acompaña a las cuatro pestañas y trae dos cosas: un gráfico y una tabla, los dos del modo activo:
+hectáreas por especie en Vista general, la serie por temporada y el ranking por
+variedad en Producción y Financiero, el reparto por clase de pendiente o por
+tipo de suelo en Suelos.
+
+Los repartos de terreno y suelo se cuentan en **cuarteles**, no en hectáreas: el
+DEM y el plano clasifican polígonos, y repartir las hectáreas de una variedad
+entre sus cuarteles exigiría un supuesto de superficie que no tenemos. La conciliación de superficie y los avisos de calidad quedan en una
 sección plegada. La tabla es además la lectura alternativa obligatoria para los
 colores que no alcanzan 3:1 de contraste.
 
