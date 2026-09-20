@@ -32,24 +32,6 @@ import openpyxl
 RAIZ = Path(__file__).resolve().parent.parent
 LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 
-# ── Consolidado por variedad: fila inicial de cada bloque ──────────────────
-# Los seis bloques corren en paralelo, una fila por variedad y en el mismo
-# orden. Aun asi cada fila se indexa por (especie, variedad) y no por posicion:
-# si el libro cambia de orden, el cruce avisa en vez de mentir.
-BLOQUES = {
-    "superficie": 2,
-    "produccion": 38,
-    "ingresos": 74,
-    "costos": 110,
-    "ebitda": 146,
-    "ebitda_ha": 184,
-}
-N_VARIEDADES = 33
-COL_TEMPORADA_0 = 4          # columna D
-N_TEMPORADAS = 21            # D..X
-FILA_TEMPORADAS = 37
-
-
 def sin_tildes(s):
     s = unicodedata.normalize("NFD", str(s))
     return "".join(c for c in s if unicodedata.category(c) != "Mn")
@@ -79,10 +61,6 @@ def num(v, nd=None):
     v = float(v)
     return round(v, nd) if nd is not None else v
 
-
-def serie(fila, nd=1):
-    """Los 21 valores de temporada de una fila (columnas D..X)."""
-    return [num(fila[COL_TEMPORADA_0 - 1 + i], nd) for i in range(N_TEMPORADAS)]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -158,80 +136,203 @@ def cruzar(prop, indice_modelo):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Lectura del libro
+# ═══════════════════════════════════════════════════════════════════════════
+# Nada se lee por numero de fila. El libro lo edita gente que agrega variedades,
+# inserta filas y mueve secciones, y una constante como "el bloque de costos
+# empieza en la fila 110" convierte cualquiera de esas ediciones en datos
+# corridos. Cada bloque se busca por su titulo, la cantidad de variedades sale
+# de contar entre la cabecera y el total, y las temporadas de contar columnas.
+# Lo unico que sigue siendo posicional son las COLUMNAS de la tabla de
+# supuestos, y por eso se validan contra su cabecera antes de usarlas.
+
+CAB_CONSOLIDADO = {
+    "produccion": "PRODUCCIÓN TOTAL",
+    "ingresos": "INGRESOS",
+    "costos": "COSTOS",
+    "ebitda": "EBITDA",
+    "ebitda_ha": "EBITDA/ha",
+}
+FIN_SUPERFICIE = "TOTAL SUPERFICIE MODELADA"
+COL_TEMPORADA_0 = 4          # columna D: la primera temporada
+
+
+def fila_de(filas, texto, col=0, desde=0):
+    """Indice 0-based de la fila cuyo texto en esa columna calza exacto."""
+    objetivo = norm(texto)
+    for i in range(desde, len(filas)):
+        v = filas[i][col]
+        if v is not None and norm(v) == objetivo:
+            return i
+    return None
+
+
+def exigir(fila, que, donde):
+    if fila is None:
+        sys.exit("No encontre '%s' en %s. Si la hoja cambio de estructura, "
+                 "revisa que el titulo siga escrito igual." % (que, donde))
+    return fila
+
+
 def leer_consolidado(ws):
-    filas = list(ws.iter_rows(min_row=1, max_row=231, max_col=24, values_only=True))
-    temporadas = [filas[FILA_TEMPORADAS - 1][COL_TEMPORADA_0 - 1 + i] for i in range(N_TEMPORADAS)]
+    filas = list(ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=30, values_only=True))
+
+    i_cab = exigir(fila_de(filas, "Especie"), "Especie", "Consolidado por variedad")
+    i_fin = exigir(fila_de(filas, FIN_SUPERFICIE), FIN_SUPERFICIE, "Consolidado por variedad")
+    n = i_fin - i_cab - 1
+    if n < 1:
+        sys.exit("El bloque de superficie quedo vacio entre la cabecera y '%s'" % FIN_SUPERFICIE)
+
+    i_prod = exigir(fila_de(filas, CAB_CONSOLIDADO["produccion"]), CAB_CONSOLIDADO["produccion"],
+                    "Consolidado por variedad")
+    cabecera = filas[i_prod]
+    temporadas = []
+    for j in range(COL_TEMPORADA_0 - 1, len(cabecera)):
+        if cabecera[j] in (None, ""):
+            break
+        temporadas.append(cabecera[j])
+    if not temporadas:
+        sys.exit("La fila de '%s' no trae temporadas a la derecha" % CAB_CONSOLIDADO["produccion"])
+
+    inicios = {"superficie": i_cab + 1}
+    for bloque, titulo in CAB_CONSOLIDADO.items():
+        inicios[bloque] = exigir(fila_de(filas, titulo), titulo, "Consolidado por variedad") + 1
 
     datos = {}
-    for i in range(N_VARIEDADES):
-        base = filas[BLOQUES["superficie"] - 1 + i]
+    vacias = 0
+    for i in range(n):
+        base = filas[inicios["superficie"] + i]
         especie, variedad, ha = base[0], base[1], base[2]
         if not especie or not variedad:
-            raise SystemExit("Fila de superficie %d sin especie/variedad" % (BLOQUES["superficie"] + i))
+            vacias += 1
+            continue
         clave = clave_modelo(especie, variedad)
         registro = {"especie": especie, "variedad": variedad, "ha": num(ha, 3)}
 
-        for bloque, fila0 in BLOQUES.items():
-            if bloque == "superficie":
-                continue
-            fila = filas[fila0 - 1 + i]
-            if norm(fila[0]) != norm(especie) or norm(fila[1]) != norm(variedad):
-                raise SystemExit(
-                    "El bloque '%s' no esta alineado en la fila %d: se esperaba %s / %s y vino %s / %s"
-                    % (bloque, fila0 + i, especie, variedad, fila[0], fila[1]))
+        for bloque in CAB_CONSOLIDADO:
+            fila = filas[inicios[bloque] + i]
+            # El cruce se indexa por (especie, variedad), no por posicion: si
+            # alguien reordena un bloque sin reordenar los otros, esto lo caza
+            # en vez de mezclar los numeros de dos variedades.
+            if norm(fila[0] or "") != norm(especie) or norm(fila[1] or "") != norm(variedad):
+                sys.exit(
+                    "El bloque '%s' no esta alineado en la fila %d: se esperaba %s / %s y vino %s / %s.\n"
+                    "Las variedades tienen que ir en el mismo orden en los seis bloques."
+                    % (bloque, inicios[bloque] + i + 1, especie, variedad, fila[0], fila[1]))
+            nd = 0 if bloque in ("produccion", "ingresos", "costos", "ebitda") else 1
+            valores = [num(fila[COL_TEMPORADA_0 - 1 + k], nd) for k in range(len(temporadas))]
             # Los costos vienen negativos en el libro; se guardan en positivo y
             # el signo queda en el nombre del campo, no en el dato.
-            nd = 0 if bloque in ("produccion", "ingresos", "costos", "ebitda") else 1
-            valores = serie(fila, nd)
             if bloque == "costos":
                 valores = [None if v is None else abs(v) for v in valores]
             registro[bloque] = valores
 
         datos[clave] = registro
+
+    if not datos:
+        sys.exit(
+            "El libro no trae ningun valor calculado. Pasa casi siempre cuando el archivo se genero\n"
+            "con un script en vez de guardarse desde Excel: openpyxl lee el resultado que Excel deja\n"
+            "cacheado, y si no esta, todas las celdas con formula se leen vacias.\n"
+            "Solucion: abrir el .xlsx en Excel o LibreOffice y volver a guardarlo.")
+    if vacias:
+        print("  aviso: %d filas del bloque de superficie venian sin especie o variedad" % vacias)
     return temporadas, datos
 
 
+# ── Inputs Generales ──────────────────────────────────────────────────────
+# Cada dato se busca por su etiqueta en la columna B. Antes iban por numero de
+# fila, que es justo lo que se corre cuando alguien agrega un supuesto: el tipo
+# de cambio se leia de otra fila y nada avisaba, porque un numero donde se
+# espera un numero no levanta sospecha.
+ETIQUETAS = [
+    ("anio_inicio", "Ano de inicio del modelo", 0, None),
+    ("horizonte", "Horizonte de proyeccion", 0, None),
+    ("tipo_cambio", "Tipo de cambio", 0, None),
+    ("iva", "IVA", 0, 4),
+    ("impuesto_renta", "Impuesto a la renta", 0, 4),
+    ("apreciacion_tierra", "Apreciacion de la tierra", 0, 4),
+    ("tasa_descuento", "Tasa de descuento", 0, 4),
+    ("superficie_predio", "Superficie total del predio", 0, 2),
+    ("superficie_tasacion", "Superficie plantada segun tasacion", 0, 2),
+    ("superficie_modelada", "Superficie operacional modelada", 0, 2),
+    ("valor_tierra_agua_clp", "Valor tierra y derechos de agua", 0, None),
+    ("valor_tierra_ha_usd", "Valor tierra y agua por hectarea modelo", 0, 0),
+    # Estas dos aparecen dos veces: primero en pesos y despues en dolares.
+    ("valor_comercial_clp", "Valor comercial de tasacion", 0, None),
+    ("valor_comercial_usd", "Valor comercial de tasacion", 1, 0),
+    ("valor_liquidacion_clp", "Valor de liquidacion", 0, None),
+    ("valor_liquidacion_usd", "Valor de liquidacion", 1, 0),
+]
+
+# Tabla de supuestos por variedad. La columna sigue siendo posicional, pero se
+# comprueba contra su cabecera: si alguien inserta una columna, el script se
+# detiene en vez de leer el precio donde estaba el rendimiento.
+CAMPOS_VARIEDAD = [
+    ("anio_plantacion", "E", None, "Año de plantacion"),
+    ("unidad", "F", None, "Unidad de produccion"),
+    ("rend_23_24", "G", 0, "Rendimiento 23-24"),
+    ("rend_24_25", "H", 0, "Rendimiento 24-25"),
+    ("rend_25_26", "I", 0, "Rendimiento 25-26"),
+    ("rend_26_27", "J", 0, "Rendimiento 26-27"),
+    ("rend_27_28", "K", 0, "Rendimiento 27-28"),
+    ("rend_28_29", "L", 0, "Rendimiento 28-29"),
+    ("rend_plena", "M", 0, "Rendimiento plena prod"),
+    ("precio_export", "N", 2, "Precio exportacion"),
+    ("precio_interno_clp", "O", 0, "Precio mercado interno"),
+    ("pct_export", "P", 3, "Exportacion"),
+    ("costo_fijo_ha", "Q", 0, "Costo fijo de produccion"),
+    ("costo_cosecha_kg", "R", 3, "Costo de cosecha"),
+    ("proceso_kg", "S", 3, "Proceso y embalaje"),
+    ("otros_var_kg", "T", 3, "Otros costos variables"),
+    ("gav_ha", "U", 0, "GAV"),
+    ("capex_pct", "V", 3, "CapEx recurrente"),
+]
+
+
 def leer_inputs(ws):
-    filas = list(ws.iter_rows(min_row=1, max_row=95, max_col=43, values_only=True))
-    col = lambda f, letra: filas[f - 1][openpyxl.utils.column_index_from_string(letra) - 1]
+    filas = list(ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=43, values_only=True))
+    idx = lambda letra: openpyxl.utils.column_index_from_string(letra) - 1
 
-    supuestos = {
-        "anio_inicio": num(col(7, "C")),
-        "horizonte": num(col(8, "C")),
-        "tipo_cambio": num(col(9, "C")),
-        "iva": num(col(11, "C"), 4),
-        "impuesto_renta": num(col(12, "C"), 4),
-        "apreciacion_tierra": num(col(13, "C"), 4),
-        "tasa_descuento": num(col(14, "C"), 4),
-        "superficie_predio": num(col(20, "C"), 2),
-        "superficie_tasacion": num(col(21, "C"), 2),
-        "superficie_modelada": num(col(22, "C"), 2),
-        "valor_tierra_agua_clp": num(col(24, "C")),
-        "valor_tierra_ha_usd": num(col(25, "C"), 0),
-        "valor_comercial_clp": num(col(27, "C")),
-        "valor_comercial_usd": num(col(28, "C"), 0),
-        "valor_liquidacion_usd": num(col(30, "C"), 0),
-    }
+    supuestos = {}
+    for nombre, etiqueta, salto, nd in ETIQUETAS:
+        i, visto = None, -1
+        objetivo = norm(etiqueta)
+        for k, f in enumerate(filas):
+            if f[1] is not None and norm(f[1]) == objetivo:
+                visto += 1
+                if visto == salto:
+                    i = k
+                    break
+        if i is None:
+            sys.exit("No encontre el supuesto '%s' en la columna B de Inputs Generales" % etiqueta)
+        supuestos[nombre] = num(filas[i][2], nd)
 
-    # Supuestos por variedad: seccion 4, filas 45 a 77.
-    campos = [
-        ("anio_plantacion", "E", None), ("unidad", "F", None),
-        ("rend_23_24", "G", 0), ("rend_24_25", "H", 0), ("rend_25_26", "I", 0),
-        ("rend_26_27", "J", 0), ("rend_27_28", "K", 0), ("rend_28_29", "L", 0),
-        ("rend_plena", "M", 0),
-        ("precio_export", "N", 2), ("precio_interno_clp", "O", 0), ("pct_export", "P", 3),
-        ("costo_fijo_ha", "Q", 0), ("costo_cosecha_kg", "R", 3),
-        ("proceso_kg", "S", 3), ("otros_var_kg", "T", 3),
-        ("gav_ha", "U", 0), ("capex_pct", "V", 3),
-    ]
+    # Seccion 4: la cabecera es la fila que tiene "Especie" en B y "Variedad" en C.
+    i_cab = None
+    for k, f in enumerate(filas):
+        if f[1] and f[2] and norm(f[1]) == "especie" and norm(f[2]) == "variedad":
+            i_cab = k
+            break
+    exigir(i_cab, "la cabecera Especie / Variedad", "Inputs Generales, seccion 4")
+
+    cabecera = filas[i_cab]
+    for _, letra, _, esperado in CAMPOS_VARIEDAD:
+        texto = norm(" ".join(str(cabecera[idx(letra)] or "").split()))
+        if norm(esperado) not in texto:
+            sys.exit(
+                "La columna %s de la tabla de supuestos dice '%s' y se esperaba '%s'.\n"
+                "Parece que se insertaron o movieron columnas: revisa la hoja antes de seguir."
+                % (letra, cabecera[idx(letra)], esperado))
+
     por_variedad = {}
-    for f in range(45, 78):
-        especie, variedad = col(f, "B"), col(f, "C")
+    for f in filas[i_cab + 1:]:
+        especie, variedad = f[1], f[2]
         if not especie or not variedad:
-            continue
+            break                      # la tabla termina en la primera fila sin variedad
         reg = {}
-        for nombre, letra, nd in campos:
-            v = col(f, letra)
+        for nombre, letra, nd, _ in CAMPOS_VARIEDAD:
+            v = f[idx(letra)]
             reg[nombre] = v if nd is None else num(v, nd)
         por_variedad[clave_modelo(especie, variedad)] = reg
     return supuestos, por_variedad
@@ -251,12 +352,21 @@ ALIAS_TASACION = {
 
 
 def leer_plantaciones(ws):
-    """Inventario de la tasacion, agrupado por (especie, variedad) normalizada."""
-    filas = list(ws.iter_rows(min_row=5, max_row=94, max_col=10, values_only=True))
+    """Inventario de la tasacion, agrupado por variedad normalizada."""
+    filas = list(ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=10, values_only=True))
+    i_cab = None
+    for k, f in enumerate(filas):
+        if f[2] and norm(f[2]) == "variedad":
+            i_cab = k
+            break
+    exigir(i_cab, "la cabecera con 'Variedad'", "Detalle Plantaciones")
+
     por_variedad, total = {}, 0.0
-    for row in filas:
+    for row in filas[i_cab + 1:]:
         _, especie, variedad, portainjerto, anio, ha, marco, plantas_ha, _, riego = row[:10]
-        if not variedad or ha is None:
+        if not variedad:
+            break                      # despues de la tabla vienen los totales
+        if ha is None:
             continue
         total += float(ha)
         por_variedad.setdefault(norm(variedad), []).append({
@@ -272,13 +382,20 @@ def leer_plantaciones(ws):
 
 
 def leer_base(ws):
-    """Produccion historica por variedad (23/24, 24/25, 25/26) y n de plantas."""
-    filas = list(ws.iter_rows(min_row=6, max_row=38, max_col=9, values_only=True))
+    """Produccion historica por variedad y numero de plantas."""
+    filas = list(ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=9, values_only=True))
+    i_cab = None
+    for k, f in enumerate(filas):
+        if f[0] and f[1] and norm(f[0]) == "especie" and norm(f[1]) == "variedad":
+            i_cab = k
+            break
+    exigir(i_cab, "la cabecera Especie / Variedad", "Base Chada")
+
     out = {}
-    for row in filas:
+    for row in filas[i_cab + 1:]:
         especie, variedad, desde, hasta, ha, plantas, p23, p24, p25 = row[:9]
         if not especie or not variedad:
-            continue
+            break
         out[norm(clave_modelo(especie, variedad))] = {
             "anio_desde": desde, "anio_hasta": hasta,
             "ha_ficha": num(ha, 3), "plantas": num(plantas, 0),
@@ -287,11 +404,68 @@ def leer_base(ws):
     return out
 
 
+def reportar_cambios(anterior, salida):
+    """Que cambio respecto de la corrida anterior.
+
+    Sin esto, actualizar el modelo es un acto de fe: el script dice OK y uno no
+    sabe si entraron dos variedades nuevas, si el tipo de cambio se movio o si
+    alguien borro media hoja sin querer. Comparar contra el JSON que ya estaba
+    cuesta nada y convierte la actualizacion en algo que se puede revisar.
+    """
+    if not anterior:
+        print("  (primera corrida: no hay con que comparar)")
+        return
+
+    antes = {clave_modelo(v["especie"], v["variedad"]): v for v in anterior.get("variedades", [])}
+    ahora = {clave_modelo(v["especie"], v["variedad"]): v for v in salida["variedades"]}
+
+    nuevas = [k for k in ahora if k not in antes]
+    fuera = [k for k in antes if k not in ahora]
+    cambio_ha = [(k, antes[k]["ha"], ahora[k]["ha"]) for k in ahora
+                 if k in antes and abs((antes[k]["ha"] or 0) - (ahora[k]["ha"] or 0)) > 0.005]
+
+    print("")
+    print("  ── Cambios respecto de la corrida anterior ──")
+    if not (nuevas or fuera or cambio_ha):
+        print("    sin cambios en el listado de variedades ni en sus superficies")
+    for k in nuevas:
+        print("    + variedad nueva   %-34s %8.2f ha" % (k, ahora[k]["ha"] or 0))
+    for k in fuera:
+        print("    - variedad que sale %-33s %8.2f ha" % (k, antes[k]["ha"] or 0))
+    for k, a, b in cambio_ha:
+        print("    ~ superficie       %-34s %8.2f -> %.2f ha" % (k, a or 0, b or 0))
+
+    for campo, etiqueta in (("tipo_cambio", "Tipo de cambio"),
+                            ("superficie_modelada", "Superficie modelada"),
+                            ("superficie_tasacion", "Superficie de tasacion"),
+                            ("tasa_descuento", "Tasa de descuento")):
+        a = (anterior.get("supuestos") or {}).get(campo)
+        b = salida["supuestos"].get(campo)
+        if a is not None and b is not None and abs(a - b) > 1e-9:
+            print("    ~ supuesto         %-34s %s -> %s" % (etiqueta, a, b))
+
+    if len(anterior.get("temporadas", [])) != len(salida["temporadas"]):
+        print("    ~ horizonte        %d -> %d temporadas"
+              % (len(anterior.get("temporadas", [])), len(salida["temporadas"])))
+
+    for campo, etiqueta in (("ebitda", "EBITDA"), ("ingresos", "Ingresos"), ("costos", "Costos")):
+        a = (anterior.get("totales") or {}).get(campo)
+        b = salida["totales"][campo]
+        if a and b and len(a) == len(b):
+            i = min(3, len(b) - 1)
+            if abs(a[i] - b[i]) > 0.5:
+                print("    ~ %-16s plena produccion  %s -> %s US$"
+                      % (etiqueta, format(round(a[i]), ",d"), format(round(b[i]), ",d")))
+
+
 def main():
     libro = Path(sys.argv[1]) if len(sys.argv) > 1 else LIBRO
     wb = abrir_libro(libro)
 
     temporadas, variedades = leer_consolidado(wb["Consolidado por variedad"])
+    # El largo lo manda el libro, no una constante: si el modelo cambia de
+    # horizonte, el JSON lo sigue sin que nadie tenga que tocar el script.
+    N_TEMPORADAS = len(temporadas)
     supuestos, inputs_var = leer_inputs(wb["Inputs Generales"])
     plantaciones, ha_tasacion = leer_plantaciones(wb["Detalle Plantaciones"])
     base = leer_base(wb["Base Chada"])
@@ -303,6 +477,10 @@ def main():
             extra = next((v for k, v in inputs_var.items() if norm(k) == norm(clave)), None)
         if extra is None:
             faltantes.append(clave)
+            # Campos vacios en vez de ausentes: el mapa lee estos nombres y una
+            # variedad a medio definir tiene que dibujarse igual, no romper.
+            for campo, _l, _n, _t in CAMPOS_VARIEDAD:
+                reg.setdefault(campo, None)
         else:
             reg.update(extra)
         reg["historico"] = base.get(norm(clave))
@@ -325,7 +503,14 @@ def main():
         # plata. Se detecta despejando la produccion desde los ingresos y el
         # precio efectivo; donde no cuadra, el mapa usa la serie despejada y la
         # ficha lo dice. No se corrige el libro en silencio.
-        precio = (reg["precio_export"] or 0) * (reg["pct_export"] if reg["pct_export"] is not None else 1)             + (reg["precio_interno_clp"] or 0) / supuestos["tipo_cambio"]             * (1 - (reg["pct_export"] if reg["pct_export"] is not None else 1))
+        # reg.get y no reg[...]: una variedad agregada al Consolidado pero no a
+        # la tabla de supuestos llega hasta aca sin estos campos, y reventar con
+        # un KeyError no le dice a nadie que le falta una fila en otra hoja. Se
+        # sigue adelante con lo que hay y la variedad queda listada en
+        # inputs_faltantes, que se avisa al final.
+        px = reg.get("pct_export")
+        px = px if px is not None else 1
+        precio = (reg.get("precio_export") or 0) * px             + (reg.get("precio_interno_clp") or 0) / supuestos["tipo_cambio"] * (1 - px)
         reg["precio_efectivo"] = round(precio, 4) if precio else None
         implicita = [None if not precio else round(i / precio) for i in reg["ingresos"]]
         ref = next((k for k in range(N_TEMPORADAS) if implicita[k]), None)
@@ -443,6 +628,12 @@ def main():
     }
 
     destino = RAIZ / "modelo_data.json"
+    anterior = None
+    if destino.exists():
+        try:
+            anterior = json.loads(destino.read_text(encoding="utf-8"))
+        except ValueError:
+            pass
     destino.write_text(json.dumps(salida, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     print("OK %s" % destino)
@@ -451,6 +642,14 @@ def main():
     print("  EBITDA %s: US$ %s  (%s US$/ha)" % (temporadas[3], format(totales["ebitda"][3], ",d"), totales["ebitda_ha"][3]))
     for k, v in salida["avisos"].items():
         print("  %-26s %s" % (k, v))
+    if faltantes:
+        print("")
+        print("  ATENCION: estas variedades estan en 'Consolidado por variedad' pero NO en la")
+        print("  tabla de supuestos de 'Inputs Generales'. Se dibujan con los numeros que hay,")
+        print("  pero sin precio, rendimiento ni costos unitarios:")
+        for k in faltantes:
+            print("    - %s" % k)
+    reportar_cambios(anterior, salida)
 
 
 if __name__ == "__main__":

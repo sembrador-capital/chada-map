@@ -280,6 +280,60 @@ tools/suelos_to_json.py         Plano de suelos (PDF) → tipo de suelo por cuar
 datos_fuente/                   El .xlsx del modelo y el PDF del plano. Ignorado por git.
 ```
 
+### Cuando llegue un modelo financiero nuevo
+
+Es lo que va a pasar seguido: alguien edita el Excel y lo manda. El
+procedimiento son dos pasos.
+
+```bash
+# 1. dejar el libro nuevo en su lugar, con el mismo nombre
+cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v1.xlsx
+
+# 2. releer el modelo y volver a cruzarlo contra los cuarteles
+python tools/modelo_to_json.py
+```
+
+**No hay que correr los otros tres.** `modelo_to_json.py` reescribe
+`modelo_data.json` y actualiza el cruce dentro de `geo_data.json` sin tocar la
+geometría, el terreno ni el suelo. Los otros scripts sólo se corren si cambia
+el KMZ o el plano — y en ese caso el orden importa, porque
+`kml_to_geojson.py` reconstruye `geo_data.json` desde cero.
+
+**Lo que el script informa al terminar**, que es lo que hay que leer antes de
+dar la actualización por buena:
+
+- las variedades que entraron, las que salieron y las que cambiaron de
+  superficie, comparando contra la corrida anterior;
+- los supuestos que se movieron (tipo de cambio, superficies, tasa de
+  descuento) y si cambió el horizonte de temporadas;
+- cómo quedaron ingresos, costos y EBITDA en plena producción, antes y después;
+- las variedades del modelo que no tienen cuartel dibujado y los cuarteles que
+  quedaron sin contraparte — o sea, los nombres que dejaron de calzar.
+
+**Nada se lee por número de fila.** Cada bloque se busca por su título, la
+cantidad de variedades sale de contar entre la cabecera y el total, y las
+temporadas de contar columnas. Agregar una variedad, insertar un supuesto o
+alargar el horizonte no rompe nada. Lo que sí está atado a la posición son las
+columnas de la tabla de supuestos, y por eso se validan contra su cabecera: si
+alguien inserta una columna, el script se detiene en vez de leer el precio donde
+estaba el rendimiento.
+
+**Los tres avisos que aparecen cuando algo no calza**, todos con nombre y
+apellido en vez de un traceback:
+
+| Si pasa esto | El script dice |
+|---|---|
+| Se agregó una variedad a un bloque y no a los otros cinco | En qué fila se desalineó, qué esperaba y qué encontró |
+| Se agregó al Consolidado pero no a la tabla de supuestos | Cuál variedad; la dibuja igual con los números que hay, sin precio ni rendimiento |
+| Se movieron columnas en la tabla de supuestos | Qué columna, qué decía y qué se esperaba |
+| El libro llegó sin valores calculados | Que hay que abrirlo en Excel y volver a guardarlo |
+
+Ese último caso vale la pena explicarlo: el script lee el resultado que Excel
+deja **cacheado** en el archivo, porque no evalúa fórmulas. Un `.xlsx` guardado
+por un script en vez de por Excel viene sin esa caché y todas las celdas con
+fórmula se leen vacías. Si el libro llega así, el script lo dice en vez de
+escribir un JSON lleno de ceros.
+
 ### Regenerar
 
 El orden importa. `kml_to_geojson.py` reescribe `geo_data.json` desde cero, y los
