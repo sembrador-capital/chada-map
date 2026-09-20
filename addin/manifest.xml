@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Add-in de Excel (task pane) para el modelo financiero de Hacienda Chada.
+  Abre un panel lateral con el mapa interactivo ya publicado en
+  https://sembrador-capital.github.io/chada-map/ dentro de un iframe: no hay
+  logica propia ni datos propios, sólo la ventana hacia el mismo sitio.
+
+  Esto NO viaja embebido en el .xlsx del modelo. Un add-in de Office se
+  instala aparte, por una de estas vias:
+
+    - Sideload (Insertar > Complementos > Mis complementos > Cargar mi
+      complemento), subiendo este archivo. Sólo queda disponible en el Excel
+      de quien lo subió: no llega a nadie más que abra la misma planilla.
+    - Catalogo de carpeta compartida (Windows, Excel de escritorio): se
+      configura una carpeta o sitio de SharePoint como catalogo de confianza
+      en el Centro de confianza, y cualquiera con acceso a esa carpeta lo ve
+      en Insertar > Complementos > CATALOGO COMPARTIDO.
+    - Implementacion centralizada, desde el centro de administracion de
+      Microsoft 365: la unica via que lo entrega automaticamente a todo el
+      equipo, pero requiere permisos de administrador del tenant.
+
+  El Id de abajo es fijo: si se vuelve a generar este manifiesto, hay que
+  conservarlo para que Excel lo reconozca como el mismo add-in y no como uno
+  nuevo.
+-->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:type="TaskPaneApp">
+  <Id>8f2b6d0c-2f13-4e6a-9d7a-6b6c6e3d9a10</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Sembrador Capital</ProviderName>
+  <DefaultLocale>es-CL</DefaultLocale>
+  <DisplayName DefaultValue="Mapa Hacienda Chada" />
+  <Description DefaultValue="Panel con el mapa interactivo de Hacienda Chada: Huelquén — especie, variedad, EBITDA, terreno y suelos." />
+  <IconUrl DefaultValue="https://sembrador-capital.github.io/chada-map/addin/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://sembrador-capital.github.io/chada-map/addin/icon-64.png" />
+  <SupportUrl DefaultValue="https://github.com/sembrador-capital/chada-map" />
+  <AppDomains>
+    <AppDomain>https://sembrador-capital.github.io</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Workbook" />
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://sembrador-capital.github.io/chada-map/addin/taskpane.html" />
+  </DefaultSettings>
+  <!-- El panel sólo muestra el mapa: no lee ni escribe nada de la planilla. -->
+  <Permissions>ReadDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title" />
+            <Description resid="GetStarted.Description" />
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl" />
+          </GetStarted>
+          <FunctionFile resid="Taskpane.Url" />
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="ChadaMap.Group">
+                <Label resid="ChadaMap.GroupLabel" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16" />
+                  <bt:Image size="32" resid="Icon.32x32" />
+                  <bt:Image size="80" resid="Icon.80x80" />
+                </Icon>
+                <Control xsi:type="Button" id="ChadaMap.TaskpaneButton">
+                  <Label resid="ChadaMap.ButtonLabel" />
+                  <Supertip>
+                    <Title resid="ChadaMap.ButtonLabel" />
+                    <Description resid="ChadaMap.ButtonDescription" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16" />
+                    <bt:Image size="32" resid="Icon.32x32" />
+                    <bt:Image size="80" resid="Icon.80x80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>ChadaMap.Taskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="https://sembrador-capital.github.io/chada-map/addin/icon-16.png" />
+        <bt:Image id="Icon.32x32" DefaultValue="https://sembrador-capital.github.io/chada-map/addin/icon-32.png" />
+        <bt:Image id="Icon.80x80" DefaultValue="https://sembrador-capital.github.io/chada-map/addin/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://sembrador-capital.github.io/chada-map/addin/taskpane.html" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://github.com/sembrador-capital/chada-map" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="El mapa de Hacienda Chada ya está listo" />
+        <bt:String id="ChadaMap.GroupLabel" DefaultValue="Hacienda Chada" />
+        <bt:String id="ChadaMap.ButtonLabel" DefaultValue="Ver mapa" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="GetStarted.Description" DefaultValue="Usa el botón 'Ver mapa' de la pestaña Inicio para abrir el panel." />
+        <bt:String id="ChadaMap.ButtonDescription" DefaultValue="Abre el mapa interactivo de Hacienda Chada: Huelquén en un panel lateral." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
