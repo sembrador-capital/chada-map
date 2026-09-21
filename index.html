@@ -77,7 +77,14 @@
        es el encoding secundario obligatorio, que este mapa sí trae: etiqueta de
        cuartel sobre el polígono, ficha al pasar el cursor con especie y
        variedad escritas, leyenda con nombre junto al color y filtro por rama.
-       Tres ranuras quedan bajo 3:1 contra el blanco: la misma reserva aplica. */
+       Tres ranuras quedan bajo 3:1 contra el blanco: la misma reserva aplica.
+
+       Las VARIEDADES se derivan de estas siete ranuras en prepararPaletas():
+       toman el tono de su especie y se escalonan en luminosidad, con un giro
+       de tono de ±11° que separa las vecinas sin sacarlas de la familia. El
+       mapa puede además escribir la variedad sobre el polígono —Vista ▸
+       Escrito sobre el cuartel—, que es el encoding secundario que sostiene
+       las ramas con diez variedades. */
     --esp-1: #2a78d6;   /* Uva de mesa   · 169,33 ha */
     --esp-2: #eb6834;   /* Cerezos       ·  58,44 ha */
     --esp-3: #1baf7a;   /* Uva vinífera  ·  45,16 ha */
@@ -147,7 +154,6 @@ body.panel-abierto #map { right:392px; }
     border-bottom:2px solid var(--sem-line);
     border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-sm);
     max-width:min(1040px, calc(100vw - 32px)); overflow-x:auto; scrollbar-width:none;
-    transition:left 0.2s ease;
 }
 body.panel-abierto .tabs { left:calc((100% - 392px) / 2); }
 .tabs::-webkit-scrollbar { display:none; }
@@ -172,7 +178,6 @@ use[href^="#ic-"] { stroke:currentColor; }
     justify-content:center;
     background:var(--sem-surface); border:var(--sem-border-hair);
     border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-md);
-    transition:left 0.2s ease;
 }
 body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
 .fc-group { display:flex; flex-direction:column; gap:3px; }
@@ -248,6 +253,19 @@ body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
 }
 .fc-pop-action:hover { background:var(--sem-beige-wash); border:var(--sem-border-strong); }
 
+/* Variante del segmentado dentro del popover: ahí el ancho lo manda la caja,
+   no el contenido, así que los botones se reparten el espacio en partes iguales. */
+.seg-pop { width:100%; }
+.seg-pop button { flex:1; padding:0 6px; font-size:10.5px; }
+
+.fc-pop-atajos { display:flex; flex-direction:column; gap:3px; font-size:10px; color:var(--sem-text-2); }
+.fc-pop-atajos kbd {
+    display:inline-block; min-width:15px; padding:0 4px; text-align:center;
+    font-family:inherit; font-size:9.5px; font-weight:600; color:var(--sem-ink);
+    background:var(--sem-beige-wash); border:var(--sem-border-hair);
+    border-bottom-width:2px; border-radius:4px;
+}
+
 /* ── COMPONENTE 3 · Interruptor ─────────────────────────────────────────── */
 .sw { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11.5px; color:var(--sem-ink); }
 .sw input { position:absolute; opacity:0; width:0; height:0; }
@@ -268,7 +286,6 @@ body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
 .stats-bar {
     position:absolute; top:12px; right:16px; z-index:var(--z-legend);
     padding:8px 12px; display:flex; gap:13px; align-items:stretch;
-    transition:right 0.2s ease;
 }
 body.panel-abierto .stats-bar { right:408px; }
 /* En los modos de dato la barra lleva cinco métricas y, anclada arriba a la
@@ -277,8 +294,13 @@ body.panel-abierto .stats-bar { right:408px; }
    escrito en la cabecera del panel—. */
 body.modo-dato .stats-bar { top:auto; bottom:20px; }
 body.modo-dato .data-stamp { display:none; }
+/* Y en Vista general se baja sola cuando ya no cabe al lado de las pestañas:
+   con el panel abierto quedan ~700 px de mapa y las dos se montaban. Lo decide
+   una medición, no un umbral -ver acomodarChrome()-. */
+body.stats-abajo .stats-bar { top:auto; bottom:20px; }
+body.stats-abajo .data-stamp { display:none; }
 /* El panel de leyenda le cede el pie a la barra: apilados, no encimados. */
-body.modo-dato .legend-panel { bottom:68px; }
+body.modo-dato .legend-panel, body.stats-abajo .legend-panel { bottom:68px; }
 .stat { display:flex; flex-direction:column; gap:1px; min-width:52px; }
 .stat + .stat { padding-left:13px; border-left:var(--sem-border-soft); }
 .stat-val { font-size:15px; font-weight:600; line-height:1.15; color:var(--sem-navy); font-variant-numeric:tabular-nums; }
@@ -349,6 +371,21 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .escala-fila { display:flex; align-items:center; gap:6px; padding:2px 0; font-size:10px; }
 .escala-nom { flex:1; color:var(--sem-ink); line-height:1.25; }
 .escala-n { color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
+
+/* Botón «solo» de la leyenda: aparece al pasar el cursor por la fila. Visible
+   siempre serían 40 botones compitiendo con los 40 nombres que hay que leer. */
+.lg-solo {
+    flex:0 0 auto; height:16px; padding:0 5px; margin-left:1px;
+    background:var(--sem-surface); border:var(--sem-border-hair); border-radius:var(--sem-radius);
+    font-family:inherit; font-size:9px; font-weight:600; letter-spacing:0.04em;
+    text-transform:uppercase; color:var(--sem-text-2); cursor:pointer;
+    opacity:0; transition:opacity 0.12s, background 0.12s, color 0.12s;
+}
+.lg-row:hover .lg-solo { opacity:1; }
+.lg-solo:focus-visible { opacity:1; outline:none; box-shadow:var(--sem-focus-ring); }
+.lg-solo:hover { background:var(--sem-navy); border-color:var(--sem-navy); color:var(--sem-surface); }
+/* Una rama sin polígono no se puede aislar: no hay nada que quede en pantalla. */
+.lg-row.sin-poligono .lg-solo { display:none; }
 
 /* ── COMPONENTE 6 · Ficha del cuartel ───────────────────────────────────── */
 .card {
@@ -452,6 +489,29 @@ body.panel-abierto .modelo-panel { display:flex; }
 .mp-conc-nota { font-size:9.5px; color:var(--sem-text-3); margin-top:6px; line-height:1.45; }
 .mp-aviso { font-size:10px; line-height:1.45; color:var(--sem-ink); background:var(--sem-beige-wash); border-left:2px solid var(--neg-3); padding:7px 9px; border-radius:0 var(--sem-radius) var(--sem-radius) 0; margin-top:9px; }
 
+/* ── COMPONENTE 8 · Asa del panel ───────────────────────────────────────── */
+/* El panel arranca cerrado: lo primero que se viene a ver es el mapa, y 392 px
+   de tablas encima de eso es una respuesta antes de la pregunta. El asa es la
+   pista de que hay algo más a la derecha; el botón «Datos» de la barra de
+   controles no basta, porque compite con otros seis controles. */
+.panel-asa {
+    position:absolute; top:50%; right:0; transform:translateY(-50%); z-index:var(--z-controls);
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    padding:14px 7px; border:var(--sem-border-hair); border-right:none;
+    border-radius:var(--sem-radius) 0 0 var(--sem-radius);
+    background:var(--sem-surface); color:var(--sem-navy);
+    font-family:inherit; font-size:10px; font-weight:600; letter-spacing:0.08em;
+    text-transform:uppercase; cursor:pointer; box-shadow:var(--sem-shadow-md);
+    transition:background 0.15s, padding 0.15s;
+}
+.panel-asa:hover { background:var(--sem-navy-wash); padding-left:10px; padding-right:10px; }
+.panel-asa:focus-visible { outline:none; box-shadow:var(--sem-focus-ring); }
+.panel-asa .ic { width:15px; height:15px; display:inline-flex; }
+.panel-asa .ic svg { width:15px; height:15px; display:block; }
+/* El rótulo va en vertical: horizontal, el asa se comería 70 px de mapa. */
+.panel-asa-txt { writing-mode:vertical-rl; }
+body.panel-abierto .panel-asa { display:none; }
+
 /* ── Chrome de Mapbox ───────────────────────────────────────────────────── */
 .mapboxgl-ctrl-group { border:var(--sem-border-hair); box-shadow:var(--sem-shadow-sm); border-radius:var(--sem-radius); }
 .mapboxgl-ctrl-group button { background-color:var(--sem-surface); }
@@ -495,6 +555,7 @@ body.panel-abierto .data-stamp { right:408px; }
 }
 @media (max-width:900px) {
     .tabs { left:8px; right:8px; transform:none; max-width:none; border-radius:var(--sem-radius); }
+    .panel-asa { top:auto; bottom:96px; transform:none; }
     .controls { top:56px; left:8px; right:8px; transform:none; flex-wrap:wrap; border-radius:var(--sem-radius); }
     .stats-bar { top:auto; bottom:20px; right:8px; left:8px; overflow-x:auto; scrollbar-width:none; }
     .legend-panel { top:auto; bottom:78px; left:8px; width:min(272px, calc(100vw - 16px)); max-height:46vh; }
@@ -541,7 +602,7 @@ body.panel-abierto .data-stamp { right:408px; }
 
 <div class="controls">
     <div class="fc-group" id="grpColor">
-        <label class="fc-label" for="selColor">Colorear por</label>
+        <label class="fc-label" for="selColor">Colorear cuarteles por</label>
         <select class="fc-select" id="selColor">
             <option value="especie">Especie</option>
             <option value="variedad" selected>Variedad</option>
@@ -584,9 +645,16 @@ body.panel-abierto .data-stamp { right:408px; }
                 <div class="fc-pop-title">Capas</div>
                 <label class="sw"><input type="checkbox" id="swRelleno" checked><span class="sw-track"></span><span>Relleno de cuarteles</span></label>
                 <label class="sw"><input type="checkbox" id="swContorno" checked><span class="sw-track"></span><span>Contorno</span></label>
-                <label class="sw"><input type="checkbox" id="swEtiquetas" checked><span class="sw-track"></span><span>Etiquetas de cuartel</span></label>
                 <label class="sw"><input type="checkbox" id="swLeyenda" checked><span class="sw-track"></span><span>Panel de leyenda</span></label>
                 <label class="sw"><input type="checkbox" id="swMetricas" checked><span class="sw-track"></span><span>Barra de métricas</span></label>
+            </div>
+            <div class="fc-pop-sect">
+                <div class="fc-pop-title">Escrito sobre el cuartel</div>
+                <div class="seg seg-pop" id="segEtiqueta" role="group" aria-label="Qué se escribe sobre cada cuartel">
+                    <button type="button" data-etq="cuartel" class="activo">Cuartel</button>
+                    <button type="button" data-etq="variedad">Variedad</button>
+                    <button type="button" data-etq="ninguna">Ninguna</button>
+                </div>
             </div>
             <div class="fc-pop-sect">
                 <div class="fc-pop-title">Relieve</div>
@@ -602,6 +670,14 @@ body.panel-abierto .data-stamp { right:408px; }
                 <button type="button" class="fc-pop-action" id="btnEncuadrar">
                     <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-ampliar"/></svg></span><span>Ver todo el predio</span>
                 </button>
+            </div>
+            <div class="fc-pop-sect">
+                <div class="fc-pop-title">Atajos</div>
+                <div class="fc-pop-atajos">
+                    <span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> cambiar de pestaña</span>
+                    <span><kbd>D</kbd> panel de datos · <kbd>L</kbd> leyenda</span>
+                    <span><kbd>F</kbd> ver todo · <kbd>Esc</kbd> soltar la ficha</span>
+                </div>
             </div>
         </div>
     </div>
@@ -647,7 +723,7 @@ body.panel-abierto .data-stamp { right:408px; }
             </div>
         </div>
         <div class="mp-sect abierta" id="sectTabla">
-            <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Tabla por variedad</button>
+            <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span><span id="tituloTabla">Tabla por variedad</span></button>
             <div class="mp-sect-body"><table class="mp-tabla" id="tabla"></table></div>
         </div>
         <div class="mp-sect" id="sectConc">
@@ -656,6 +732,11 @@ body.panel-abierto .data-stamp { right:408px; }
         </div>
     </div>
 </div>
+
+<button type="button" class="panel-asa" id="panelAsa" title="Abrir el panel de datos (tecla D)">
+    <span class="ic"><svg viewBox="0 0 18 18"><use href="#ic-informe"/></svg></span>
+    <span class="panel-asa-txt">Datos</span>
+</button>
 
 <div class="card" id="card" role="dialog" aria-live="polite"></div>
 <div class="aviso" id="aviso" role="status" aria-live="polite" hidden></div>
@@ -689,6 +770,11 @@ const nf = (x, d = 1) => x == null ? '—' : x.toLocaleString('es-CL', { minimum
 const usd = x => x == null ? '—' : (x < 0 ? '−' : '') + 'US$ ' + Math.abs(Math.round(x)).toLocaleString('es-CL');
 const pct = x => x == null ? '—' : (x * 100).toFixed(1).replace('.', ',') + '%';
 const miles = x => x == null ? '—' : Math.round(x).toLocaleString('es-CL');
+/* Los US$ por kilo viven entre 0,26 y 2,84. Redondeados al entero quedarían
+   todos en «US$ 1» o «US$ 2» y el dato desaparecería, así que van con dos
+   decimales y con la unidad pegada: sin el «/kg» se confunden con los US$/ha,
+   que son cuatro órdenes de magnitud más grandes. */
+const usdkg = x => x == null ? '—' : (x < 0 ? '−' : '') + 'US$ ' + Math.abs(x).toFixed(2).replace('.', ',') + '/kg';
 
 /* La clave de una variedad incluye su especie: "Cabernet Sauvignon" existe en
    Uva vinífera y en Disponible, y "Mixtos" en Cerezos y en Ciruelos. */
@@ -773,6 +859,35 @@ const ESCALAS = {
         tokens: ['--neg-3', '--neg-2', '--neg-1', '--pos-1', '--pos-3', '--pos-4'],
         fmt: pct
     },
+    /* ── Economía unitaria ──────────────────────────────────────────────
+       Las de arriba dividen por hectárea; estas tres dividen por kilo
+       producido. Es la única forma de comparar una cereza con una parra sin
+       que la densidad de plantación se meta en el medio: dos variedades con el
+       mismo costo/ha pueden tener el doble de costo/kg si una rinde la mitad.
+       Los cortes son redondos y fijos, como todos los demás: 0,5 · 1 · 1,5 US$
+       son los escalones con que se habla del precio de la fruta. */
+    ingreso_kg: {
+        etiqueta: 'Ingresos / kg', titulo: 'Ingreso por kilo', unidad: 'US$ por kilo vendido', tipo: 'secuencial',
+        cortes: [0.5, 1, 1.5, 2.2],
+        tokens: ['--seq-1', '--seq-2', '--seq-3', '--seq-4', '--seq-5'],
+        fmt: usdkg
+    },
+    costo_kg: {
+        etiqueta: 'Costos / kg', titulo: 'Costo por kilo', unidad: 'US$ por kilo producido', tipo: 'secuencial',
+        cortes: [0.5, 0.9, 1.3, 2],
+        tokens: ['--cos-1', '--cos-2', '--cos-3', '--cos-4', '--cos-5'],
+        fmt: usdkg
+    },
+    /* El margen por kilo es EBITDA sobre kilos: lo que deja cada kilo después
+       de costos. No es el margen sobre ventas —ese ya está arriba y es una
+       razón sin unidad—; este es plata por kilo, y por eso lleva la rampa
+       divergente y no la de porcentaje. */
+    ebitda_kg: {
+        etiqueta: 'Margen / kg', titulo: 'Margen por kilo', unidad: 'US$ de EBITDA por kilo', tipo: 'divergente',
+        cortes: [-0.5, -0.2, 0, 0.2, 0.5],
+        tokens: ['--neg-3', '--neg-2', '--neg-1', '--pos-1', '--pos-3', '--pos-4'],
+        fmt: usdkg
+    },
     rend_kg_ha: {
         etiqueta: 'Rendimiento', titulo: 'Rendimiento por hectárea', unidad: 'kg/ha', tipo: 'secuencial',
         cortes: [3000, 8000, 15000, 25000],
@@ -805,7 +920,25 @@ const ESCALAS = {
         fmt: x => miles(x) + ' cm'
     }
 };
-const METRICAS_FIN = ['ebitda_ha', 'ingreso_ha', 'costo_ha', 'margen'];
+/* Siete métricas en una lista plana se leen como un montón; en dos familias se
+   leen como una pregunta: ¿por hectárea o por kilo? El selector las agrupa, y
+   el resto del modo —barra de métricas, tabla y ranking— sigue a la familia
+   elegida para que no convivan dos denominadores en la misma pantalla. */
+const METRICAS_FIN = [
+    { grupo: 'Por hectárea', campos: ['ebitda_ha', 'ingreso_ha', 'costo_ha', 'margen'] },
+    { grupo: 'Por kilo producido', campos: ['ebitda_kg', 'ingreso_kg', 'costo_kg'] }
+];
+const POR_KILO = new Set(['ingreso_kg', 'costo_kg', 'ebitda_kg']);
+const porKilo = () => POR_KILO.has(metrica);
+
+/* Cómo rotula el eje del ranking cada campo. Sin esto el eje dividía todo por
+   mil y un margen de 0,5 US$/kg salía rotulado «0k». */
+const EJE = {
+    ebitda_ha:  v => nf(v / 1000, 0) + 'k', ingreso_ha: v => nf(v / 1000, 0) + 'k',
+    costo_ha:   v => nf(v / 1000, 0) + 'k', rend_kg_ha: v => nf(v / 1000, 0) + 'k',
+    margen:     v => nf(v * 100, 0) + '%',
+    ingreso_kg: v => nf(v, 2), costo_kg: v => nf(v, 2), ebitda_kg: v => nf(v, 2)
+};
 /* Suelos tiene dos caras y se abre por una subpestaña. La física es lo que
    dice el plano de la hacienda; el terreno es lo que dice el relieve. Son el
    mismo cuartel mirado de dos maneras, no dos pestañas del predio.
@@ -828,6 +961,11 @@ let SUELO = {};                // clase -> entrada de la simbología del plano
 let UTILES = 1;                // temporadas hasta plena producción, inclusive
 let vistaGrafico = 'serie', ordenTabla = { campo: 'ebitda_ha', asc: false };
 let fijado = null, hoverId = null, estiloSatelital = true, grafico = null, relieve = false;
+/* Qué se escribe sobre cada polígono: el código del cuartel, el nombre de la
+   variedad, o nada. */
+let etiqueta = 'cuartel';
+
+const panelAbierto = () => document.body.classList.contains('panel-abierto');
 
 /* Dentro de Suelos, qué cara se está mirando. */
 const verTerreno = () => modo === 'suelos' && subSuelo === 'terreno';
@@ -891,7 +1029,10 @@ Promise.all([traer('geo_data.json'), traer('modelo_data.json')]).then(([geo, mod
     construirLeyenda();
     construirDatalist();
     sincronizarControles();
-    togglePanel(true);
+    // Cerrado. Lo primero que se viene a ver es el mapa, y 392 px de tablas
+    // encima de eso es una respuesta antes de que nadie haya hecho la pregunta.
+    // El asa de la derecha y la tecla D lo abren.
+    togglePanel(false);
     $('dataStamp').textContent = 'KMZ ' + (GEO.generated_at || '').slice(0, 10) +
         ' · Modelo ' + (MOD.generated_at || '').slice(0, 10);
     if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
@@ -957,9 +1098,21 @@ function prepararPaletas() {
         const vars = Object.entries(porEspecie[esp].variedades)
             .sort((a, b) => HA_VKEY[b[0]] - HA_VKEY[a[0]]);
         vars.forEach(([k], j) => {
-            const L = vars.length === 1 ? slot.L
-                : L_CLARA - (L_CLARA - L_OSCURA) * (j / (vars.length - 1));
-            COLOR_VARIEDAD[k] = enGamut(L, slot.C, slot.H);
+            const f = vars.length === 1 ? 0.5 : j / (vars.length - 1);
+            const L = vars.length === 1 ? slot.L : L_CLARA - (L_CLARA - L_OSCURA) * f;
+            // Además de la luminosidad, un giro corto de tono. La rama más
+            // poblada es Uva de mesa, con diez variedades: repartir ΔL 0,32
+            // entre nueve pasos deja escalones de 0,036, muy por debajo del
+            // 0,06 que pide una rampa ordinal, y ahí dos variedades vecinas
+            // quedaban a un paso que no se ve. Veintidós grados de punta a
+            // punta no sacan al color de su familia —la especie se sigue
+            // reconociendo de un vistazo— y el peor par adyacente sube de ΔE
+            // 3,20 a 3,47 en OKLab, sin que ningún par quede bajo ese 3,20
+            // anterior y con la luminosidad monótona en las cinco ramas.
+            // Sigue sin alcanzar por sí solo: la reserva es el encoding
+            // secundario —etiqueta de variedad sobre el polígono, leyenda con
+            // nombre, ficha al pasar el cursor—, que este mapa sí trae.
+            COLOR_VARIEDAD[k] = enGamut(L, slot.C, slot.H + (f - 0.5) * 22);
         });
     });
     Object.keys(porEspecie).forEach(esp => {
@@ -974,16 +1127,32 @@ function prepararPaletas() {
    celda, así que promedia las variedades presentes ponderando por la
    superficie que el MODELO les asigna. El margen no se promedia como razón:
    se recompone como EBITDA sobre ingresos, que es lo que significa. */
+/* Las razones no se promedian: se recomponen. El promedio ponderado por
+   hectárea de dos US$/kg no es el costo de ningún kilo —la variedad que más
+   rinde aporta más kilos al total, no más hectáreas—, así que cada razón
+   declara su numerador y su denominador y cada uno se suma por su lado. */
+const RAZON = {
+    margen:     ['ebitda', 'ingresos'],
+    ingreso_kg: ['ingresos', 'kg'],
+    costo_kg:   ['costos', 'kg'],
+    ebitda_kg:  ['ebitda', 'kg']
+};
+
 function valorCuartel(p, campo, temporada) {
     // Las props pueden venir de GEO (arreglos reales) o de un evento de Mapbox,
     // que las serializa a string. arr() normaliza las dos procedencias.
     const claves = arr(p.modelo).filter(k => MIDX[k]);
     if (!claves.length) return null;
 
-    if (campo === 'margen') {
-        let eb = 0, ing = 0;
-        claves.forEach(k => { const v = MIDX[k]; eb += v.ebitda[temporada] || 0; ing += v.ingresos[temporada] || 0; });
-        return ing ? eb / ing : null;
+    const razon = RAZON[campo];
+    if (razon) {
+        let num = 0, den = 0;
+        claves.forEach(k => {
+            const v = MIDX[k];
+            num += (v[razon[0]] || [])[temporada] || 0;
+            den += (v[razon[1]] || [])[temporada] || 0;
+        });
+        return den ? num / den : null;
     }
     let num = 0, den = 0;
     claves.forEach(k => {
@@ -1065,6 +1234,15 @@ function montarCapas() {
                            ['boolean', ['feature-state', 'hover'], false], 2.2, 0.8]
         }
     });
+    // Resalte al recorrer la leyenda: un contorno grueso sobre los cuarteles de
+    // la rama que tiene el cursor encima. Vive en su propia capa y con su propio
+    // filtro porque no es un estado del dato -no cambia qué está encendido-,
+    // sino una respuesta al cursor, y tiene que poder apagarse de una.
+    map.addLayer({
+        id: 'cuarteles-resalte', type: 'line', source: 'cuarteles',
+        filter: ['boolean', false],
+        paint: { 'line-color': cFuerte, 'line-width': 3.2, 'line-opacity': 0.9 }
+    });
     map.addLayer({
         id: 'cuarteles-label', type: 'symbol', source: 'etiquetas', minzoom: 14.2,
         layout: {
@@ -1079,10 +1257,31 @@ function montarCapas() {
     aplicarFiltro();
     vis('cuarteles-fill',  $('swRelleno').checked);
     vis('cuarteles-line',  $('swContorno').checked);
-    vis('cuarteles-label', $('swEtiquetas').checked);
+    aplicarEtiqueta();
     vis('sombreado',       $('swSombreado').checked);
     aplicarRelieve($('swRelieve').checked);
     if (fijado) setEstado(fijado, 'fijo', true);
+}
+
+/* Qué dice la etiqueta sobre cada paño. El código del cuartel sirve de cerca,
+   para ubicarse; el nombre de la variedad sirve de lejos, que es cuando uno
+   está mirando el predio entero y quiere saber qué hay plantado dónde. Por eso
+   la variedad entra antes en zoom y se parte en dos líneas: un «Sweet
+   Celebration» en una sola línea tapa el cuartel del lado. */
+function aplicarEtiqueta() {
+    if (!map.getLayer('cuarteles-label')) return;
+    vis('cuarteles-label', etiqueta !== 'ninguna');
+    if (etiqueta === 'ninguna') return;
+    const variedad = etiqueta === 'variedad';
+    map.setLayoutProperty('cuarteles-label', 'text-field', ['get', etiqueta]);
+    map.setLayoutProperty('cuarteles-label', 'text-max-width', variedad ? 7 : 10);
+    // Un código de cuartel son cuatro dígitos y se lee a 9 px; «Sweet
+    // Celebration» a 9 px no se lee, se adivina. La variedad arranca más grande
+    // y crece menos, porque de cerca el nombre ya no es el problema.
+    map.setLayoutProperty('cuarteles-label', 'text-size', variedad
+        ? ['interpolate', ['linear'], ['zoom'], 13.3, 10.5, 15, 12.5, 17, 14]
+        : ['interpolate', ['linear'], ['zoom'], 14.2, 9, 17, 13]);
+    map.setLayerZoomRange('cuarteles-label', variedad ? 13.3 : 14.2, 24);
 }
 
 /* El 3D se paga en legibilidad: al inclinar la cámara los cuarteles del fondo
@@ -1117,11 +1316,11 @@ function inicializar() {
         if (ancho === anchoPrevio) return;
         anchoPrevio = ancho;
         map.resize();
-        acomodarLeyenda();
+        acomodarChrome();
     }).observe($('map'));
     // El observador sólo mira el mapa; la barra de controles también reordena
     // sus filas cuando cambia el ancho de la ventana sin que el mapa cambie.
-    window.addEventListener('resize', acomodarLeyenda);
+    window.addEventListener('resize', acomodarChrome);
 
     map.on('mousemove', 'cuarteles-fill', onHover);
     map.on('mouseleave', 'cuarteles-fill', onLeave);
@@ -1218,14 +1417,22 @@ function mostrarFicha(p, punto, fija = false) {
         if (regs.some(v => v.produccion_libro)) avisos.push('Producción despejada desde los ingresos: el bloque del libro trae corridas las filas de Uva Vinífera.');
 
     } else if (modo === 'financiero') {
-        const eb = valorCuartel(p, 'ebitda_ha', t), mg = valorCuartel(p, 'margen', t);
+        // La ficha muestra la familia que se está mirando y no las dos: mezclar
+        // US$/ha con US$/kg en una misma columna de números obliga a leer la
+        // unidad en cada fila para no restar peras con manzanas.
+        const campo = porKilo()
+            ? { a: 'ingreso_kg', b: 'costo_kg', c: 'ebitda_kg' }
+            : { a: 'ingreso_ha', b: 'costo_ha', c: 'ebitda_ha' };
+        const f = porKilo() ? usdkg : x => usd(x) + '/ha';
+        const res = valorCuartel(p, campo.c, t), mg = valorCuartel(p, 'margen', t);
         cuerpo = regs.length
-            ? kv('Ingresos', usd(valorCuartel(p, 'ingreso_ha', t)) + '/ha') +
-              kv('Costos', usd(valorCuartel(p, 'costo_ha', t)) + '/ha') +
-              kv('EBITDA', usd(eb) + '/ha', signo(eb)) +
-              kv('Margen', pct(mg), signo(mg)) +
+            ? kv('Ingresos', f(valorCuartel(p, campo.a, t))) +
+              kv('Costos', f(valorCuartel(p, campo.b, t))) +
+              kv(porKilo() ? 'Margen' : 'EBITDA', f(res), signo(res)) +
+              kv('Margen s/ventas', pct(mg), signo(mg)) +
+              (porKilo() ? kv('Producción', miles(valorCuartel(p, 'rend_kg_ha', t)) + ' kg/ha') : '') +
               (regs.length > 1 ? sec('Por variedad', regs.map(v =>
-                  chip(esc(v.variedad), usd(v.ebitda_ha[t]) + '/ha')).join('')) : '')
+                  chip(esc(v.variedad), f(v[campo.c][t]))).join('')) : '')
             : '';
         if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
 
@@ -1274,7 +1481,7 @@ function mostrarFicha(p, punto, fija = false) {
 
 function posicionarFicha(punto) {
     const card = $('card'), r = card.getBoundingClientRect();
-    const limite = document.body.classList.contains('panel-abierto') ? window.innerWidth - 392 : window.innerWidth;
+    const limite = panelAbierto() ? window.innerWidth - 392 : window.innerWidth;
     let x = punto.x + 16, y = punto.y + 14;
     if (x + r.width > limite - 12) x = punto.x - r.width - 16;
     if (y + r.height > window.innerHeight - 12) y = Math.max(12, window.innerHeight - r.height - 12);
@@ -1314,6 +1521,7 @@ function construirLeyenda() {
                 <i class="lg-dot" style="background:${COLOR_VARIEDAD[k]}"></i>
                 <span class="lg-name">${esc(v.variedad)}</span>
                 <span class="lg-meta">${HA_VKEY[k] ? nf(HA_VKEY[k], 1) + ' ha' : '—'}</span>
+                <button type="button" class="lg-solo" title="Ver sólo esta variedad">solo</button>
             </div>`;
         }).join('');
         return `<div class="lg-esp abierta" data-especie="${esc(esp)}">
@@ -1322,29 +1530,43 @@ function construirLeyenda() {
                         <i class="lg-dot" style="background:${COLOR_ESPECIE[esp]}"></i>
                         <span class="lg-name">${esc(esp)}</span>
                         <span class="lg-meta">${e.cuarteles} · ${HA_ESPECIE[esp] ? nf(HA_ESPECIE[esp], 1) + ' ha' : 's/m'}</span>
+                        <button type="button" class="lg-solo" title="Ver sólo esta especie">solo</button>
                     </div>
                     <div class="lg-vars">${filas}</div>
                 </div>`;
     }).join('');
 
-    // Un clic en el nombre enciende o apaga; el caret sólo pliega la rama.
+    // Un clic en el nombre enciende o apaga; el caret sólo pliega la rama, y
+    // «solo» aísla. Al pasar el cursor, los cuarteles de la rama se resaltan en
+    // el mapa: es la única forma de saber dónde cae un nombre de la lista.
+    const ramaDe = row => {
+        const esp = row.closest('.lg-esp');
+        return [...esp.querySelectorAll('.lg-vars .lg-row')].map(r => r.dataset.vkey);
+    };
     $('legendBody').querySelectorAll('.lg-esp-row').forEach(row => {
         row.addEventListener('click', ev => {
             const esp = row.closest('.lg-esp');
             if (ev.target.closest('.lg-caret')) { esp.classList.toggle('abierta'); return; }
-            const keys = [...esp.querySelectorAll('.lg-vars .lg-row')].map(r => r.dataset.vkey);
+            const keys = ramaDe(row);
+            if (ev.target.closest('.lg-solo')) return aislar(keys);
             const encender = keys.some(k => !visibles.has(k));
             keys.forEach(k => encender ? visibles.add(k) : visibles.delete(k));
             aplicarFiltro();
         });
+        row.addEventListener('mouseenter', () => resaltar(ramaDe(row)));
     });
     $('legendBody').querySelectorAll('.lg-vars .lg-row').forEach(row => {
-        row.addEventListener('click', () => {
+        row.addEventListener('click', ev => {
             const k = row.dataset.vkey;
+            if (ev.target.closest('.lg-solo')) return aislar([k]);
             visibles.has(k) ? visibles.delete(k) : visibles.add(k);
             aplicarFiltro();
         });
+        row.addEventListener('mouseenter', () => resaltar([row.dataset.vkey]));
     });
+    // Un solo apagador al salir del panel: colgarlo de cada fila dejaba el
+    // resalte prendido al pasar de una fila a la de al lado.
+    $('legendBody').addEventListener('mouseleave', () => resaltar(null));
 
     actualizarSubLeyenda();
 }
@@ -1413,7 +1635,9 @@ function pintarEscala() {
         return;
     }
     const e = escalaActiva();
-    const ticks = e.cortes.map(c => e.fmt === pct ? pct(c) : (Math.abs(c) >= 1000 ? Math.round(c / 1000) + 'k' : String(c)));
+    const ticks = e.cortes.map(c => e.fmt === pct ? pct(c)
+        : e.fmt === usdkg ? nf(c, 2)
+        : (Math.abs(c) >= 1000 ? Math.round(c / 1000) + 'k' : String(c)));
     caja.hidden = false;
     caja.innerHTML = `
         <div class="escala-tit">${esc(e.titulo)}</div>
@@ -1424,6 +1648,27 @@ function pintarEscala() {
         <div class="escala-barra">${e.tokens.map(tk => `<i style="background:${css(tk)}"></i>`).join('')}</div>
         <div class="escala-ticks">${ticks.map(x => `<span>${esc(x)}</span>`).join('')}</div>
         <div class="escala-nd"><i style="background:${css('--dat-sindato')}"></i>Sin contraparte en el modelo</div>`;
+}
+
+/* Aislar una rama: la deja sola encendida y, si ya estaba sola, devuelve todas.
+   Apagar treinta y dos variedades a mano para poder mirar una es el camino
+   largo del mismo viaje, y volver de ahí era peor todavía. */
+function aislar(claves) {
+    const solo = claves.length === visibles.size && claves.every(k => visibles.has(k));
+    visibles.clear();
+    if (solo) Object.keys(MODELOS_DE_VKEY).forEach(k => visibles.add(k));
+    else claves.forEach(k => visibles.add(k));
+    aplicarFiltro();
+}
+
+/* Dónde está lo que dice esta fila de la leyenda. Con 174 polígonos y nombres
+   que se repiten entre especies, leer «Santina» y no saber a qué parte del
+   cerro apunta es el hueco más grande que tenía la leyenda. */
+function resaltar(claves) {
+    if (!map.getLayer('cuarteles-resalte')) return;
+    map.setFilter('cuarteles-resalte', claves && claves.length
+        ? ['match', ['concat', ['get', 'especie'], '|', ['get', 'variedad']], claves, true, false]
+        : ['boolean', false]);
 }
 
 /* El filtro es la única puerta: capas, métricas, leyenda y panel leen el mismo set. */
@@ -1457,13 +1702,27 @@ function agregado(regs, temporada) {
     const ha = regs.reduce((a, v) => a + v.ha, 0);
     const suma = campo => regs.reduce((a, v) => a + (v[campo][temporada] || 0), 0);
     const ingresos = suma('ingresos'), costos = suma('costos'), ebitda = suma('ebitda');
-    // Los kilos se suman ya convertidos: sumar la producción cruda mezclaría
-    // cajas de uva de mesa con kilos de cereza en el mismo total.
-    const kg = regs.reduce((a, v) => a + (v.produccion[temporada] || 0) * (v.kg_por_unidad || 1), 0);
-    return { ha, kg, ingresos, costos, ebitda, ebitda_ha: ha ? ebitda / ha : null, margen: ingresos ? ebitda / ingresos : null };
+    // Los kilos vienen ya convertidos desde el modelo: sumar la producción
+    // cruda mezclaría cajas de uva de mesa con kilos de cereza en un total que
+    // no sería ni cajas ni kilos.
+    const kg = suma('kg');
+    return {
+        ha, kg, ingresos, costos, ebitda,
+        ebitda_ha: ha ? ebitda / ha : null,
+        margen: ingresos ? ebitda / ingresos : null,
+        ingreso_kg: kg ? ingresos / kg : null,
+        costo_kg: kg ? costos / kg : null,
+        ebitda_kg: kg ? ebitda / kg : null
+    };
 }
 
 function pintarMetricas() {
+    // Se vuelve a medir al final: el ancho de la barra depende de lo que diga,
+    // y lo que dice cambia con el modo, con la métrica y con el filtro.
+    try { return pintarMetricasBarra(); } finally { acomodarChrome(); }
+}
+
+function pintarMetricasBarra() {
     const regs = clavesVisibles(), a = agregado(regs, t);
     const cuarteles = GEO.cuarteles.features.filter(f => visibles.has(vkey(f.properties.especie, f.properties.variedad))).length;
     const plural = (n, s, p) => n === 1 ? s : p;
@@ -1524,12 +1783,24 @@ function pintarMetricas() {
             <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
         return;
     }
+    // La barra habla en la unidad elegida. Las dos familias comparten el ancla
+    // -la superficie encendida y el EBITDA absoluto- y cambian las cuatro del
+    // medio: apilar US$/ha y US$/kg en la misma línea obliga a mirar la etiqueta
+    // de cada número antes de poder comparar dos, y entonces ya no es un titular.
+    const dec2 = x => x == null ? '—' : (x < 0 ? '−' : '') + Math.abs(x).toFixed(2).replace('.', ',');
+    const medio = porKilo()
+        ? `<div class="stat"><span class="stat-val">${nf(a.kg / 1000, 0)}</span><span class="stat-lbl">Toneladas</span></div>
+           <div class="stat"><span class="stat-val">${dec2(a.ingreso_kg)}</span><span class="stat-lbl">Ingreso US$/kg</span></div>
+           <div class="stat"><span class="stat-val">${dec2(a.costo_kg)}</span><span class="stat-lbl">Costo US$/kg</span></div>
+           <div class="stat"><span class="stat-val${a.ebitda_kg < 0 ? ' neg' : ''}">${dec2(a.ebitda_kg)}</span><span class="stat-lbl">Margen US$/kg</span></div>`
+        : `<div class="stat"><span class="stat-val">${miles(a.ingresos)}</span><span class="stat-lbl">Ingresos US$</span></div>
+           <div class="stat"><span class="stat-val">${miles(a.costos)}</span><span class="stat-lbl">Costos US$</span></div>
+           <div class="stat"><span class="stat-val${a.ebitda_ha < 0 ? ' neg' : ''}">${miles(a.ebitda_ha)}</span><span class="stat-lbl">EBITDA/ha</span></div>
+           <div class="stat"><span class="stat-val${a.margen < 0 ? ' neg' : ''}">${pct(a.margen)}</span><span class="stat-lbl">Margen s/ventas</span></div>`;
     $('statsBar').innerHTML = `
         <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">${etiquetaHa}</span></div>
-        <div class="stat"><span class="stat-val">${miles(a.ingresos)}</span><span class="stat-lbl">Ingresos US$</span></div>
-        <div class="stat"><span class="stat-val">${miles(a.costos)}</span><span class="stat-lbl">Costos US$</span></div>
-        <div class="stat"><span class="stat-val${a.ebitda < 0 ? ' neg' : ''}">${miles(a.ebitda)}</span><span class="stat-lbl">EBITDA US$</span></div>
-        <div class="stat"><span class="stat-val${a.ebitda_ha < 0 ? ' neg' : ''}">${miles(a.ebitda_ha)}</span><span class="stat-lbl">EBITDA/ha</span></div>`;
+        ${medio}
+        <div class="stat"><span class="stat-val${a.ebitda < 0 ? ' neg' : ''}">${miles(a.ebitda)}</span><span class="stat-lbl">EBITDA US$</span></div>`;
 }
 
 /* ── Panel del modelo ───────────────────────────────────────────────────── */
@@ -1582,7 +1853,7 @@ function porEspecieVisible() {
 }
 
 function pintarPanel() {
-    if (!document.body.classList.contains('panel-abierto')) return;
+    if (!panelAbierto()) return;
     const regs = clavesVisibles();
     $('mpTitulo').textContent = tituloPanel();
     // Sólo la temporada, y sólo donde la hay: las hectáreas encendidas ya están
@@ -1592,6 +1863,11 @@ function pintarPanel() {
     // Las dos vistas de gráfico son de Producción y Financiero; en los demás
     // modos hay una sola cosa que mostrar.
     $('mpChartTabs').hidden = !(modo === 'produccion' || modo === 'financiero');
+    // En Vista general y en Terreno la tabla es por especie, y en Tipo de suelo
+    // por tipo: el encabezado decía «Tabla por variedad» sobre una tabla cuya
+    // primera columna era «Especie».
+    $('tituloTabla').textContent = verFisico() ? 'Tabla por tipo de suelo'
+        : (modo === 'general' || verTerreno()) ? 'Tabla por especie' : 'Tabla por variedad';
     dibujarGrafico(regs);
     pintarTabla(regs);
     pintarConciliacion();
@@ -1672,19 +1948,26 @@ function tablaSuelos() {
 function tablaVariedades(regs) {
     const cols = modo === 'produccion'
         ? [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
-           { k: 'rend_kg_ha', t: 'kg/ha' }, { k: 'produccion', t: 'Ton' }]
+           { k: 'rend_kg_ha', t: 'kg/ha' }, { k: 'kg', t: 'Ton' }]
+        : porKilo()
+        ? [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
+           { k: 'ingreso_kg', t: 'Ing/kg' }, { k: 'costo_kg', t: 'Costo/kg' },
+           { k: 'ebitda_kg', t: 'Margen/kg' }]
         : [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
            { k: 'costo_ha', t: 'Costo/ha' }, { k: 'ebitda_ha', t: 'EBITDA/ha' },
            { k: 'margen', t: 'Margen' }];
     if (!cols.some(c => c.k === ordenTabla.campo)) {
-        ordenTabla = { campo: modo === 'produccion' ? 'rend_kg_ha' : 'ebitda_ha', asc: false };
+        ordenTabla = { campo: modo === 'produccion' ? 'rend_kg_ha' : (porKilo() ? 'ebitda_kg' : 'ebitda_ha'), asc: false };
     }
     const valor = (v, k) => k === 'variedad' ? v.variedad : (Array.isArray(v[k]) ? v[k][t] : v[k]);
     const celda = (v, k) => {
         if (k === 'variedad') return esc(v.variedad);
         if (k === 'ha') return nf(v.ha, 1);
         if (k === 'margen') return pct(v.margen[t]);
-        if (k === 'produccion') return miles((v.produccion[t] || 0) * (v.kg_por_unidad || 1) / 1000);
+        if (k === 'kg') return miles((v.kg[t] || 0) / 1000);
+        // Dos decimales y sin el «US$ /kg» de la unidad: la columna ya lo dice
+        // en el encabezado y repetirlo en 33 filas no agrega nada.
+        if (POR_KILO.has(k)) return v[k][t] == null ? '—' : nf(v[k][t], 2);
         return miles(v[k][t]);
     };
     const filas = [...regs].sort((x, y) => {
@@ -1695,7 +1978,7 @@ function tablaVariedades(regs) {
         const clave = vkey(v.especie, v.variedad);
         const color = COLOR_VARIEDAD[VKEY_DE_MODELO[clave]] || css('--dat-sindato');
         return `<tr data-variedad="${esc(clave)}">${cols.map((c, i) => {
-            const neg = (c.k === 'ebitda_ha' || c.k === 'margen') && valor(v, c.k) < 0;
+            const neg = (c.k === 'ebitda_ha' || c.k === 'margen' || c.k === 'ebitda_kg') && valor(v, c.k) < 0;
             return i === 0
                 ? `<td><i class="lg-dot" style="background:${color}"></i>${celda(v, c.k)}</td>`
                 : `<td class="${neg ? 'neg' : ''}">${celda(v, c.k)}</td>`;
@@ -1914,17 +2197,17 @@ function dibujarGrafico(regs) {
     const produccion = modo === 'produccion';
     const comun = COMUN_CHART();
     const barra = { borderRadius: 3, borderSkipped: false, categoryPercentage: 0.7, barPercentage: 0.9 };
-    cv.parentElement.style.height = vistaGrafico === 'ranking' ? alto(regs.length * 0.73) : '236px';
 
     if (vistaGrafico === 'serie') {
         const idx = [...Array(UTILES).keys()];
-        const ton = i => regs.reduce((a, v) => a + (v.produccion[i] || 0) * (v.kg_por_unidad || 1), 0) / 1000;
+        const ton = i => regs.reduce((a, v) => a + (v.kg[i] || 0), 0) / 1000;
         const datasets = produccion
             ? [{ label: 'Producción', data: idx.map(ton), backgroundColor: VIZ.s1, ...barra }]
             : [{ label: 'Ingresos', data: idx.map(i => agregado(regs, i).ingresos), backgroundColor: VIZ.s1, ...barra },
                { label: 'Costos',   data: idx.map(i => agregado(regs, i).costos),   backgroundColor: VIZ.s2, ...barra },
                { label: 'EBITDA',   data: idx.map(i => agregado(regs, i).ebitda),   backgroundColor: VIZ.s3, ...barra }];
 
+        cv.parentElement.style.height = '236px';
         grafico = new Chart(cv, {
             type: 'bar',
             data: { labels: idx.map(i => MOD.temporadas[i].replace('-', '/')), datasets },
@@ -1950,8 +2233,12 @@ function dibujarGrafico(regs) {
                     x: { ...base, grid: { display: false }, ticks: { ...tick, maxRotation: 0, minRotation: 0 } },
                     y: (() => {
                         const r = rangoY(datasets.flatMap(d => d.data));
+                        // Sin maxTicksLimit, por lo mismo que en las barras
+                        // horizontales: pisa al stepSize y Chart.js inventa su
+                        // propio paso, que sale de números como −0,80 o −0,35.
+                        // Lo que sobra lo salta autoSkip, que es su trabajo.
                         return { ...base, min: r.min, max: r.max,
-                                 ticks: { ...tick, stepSize: r.paso, maxTicksLimit: 6,
+                                 ticks: { ...tick, stepSize: r.paso,
                                           callback: v => produccion ? nf(v / 1000, 0) + 'k t' : nf(v / 1e6, 1) + 'M' } };
                     })()
                 }
@@ -1962,9 +2249,17 @@ function dibujarGrafico(regs) {
         return;
     }
 
-    const campo = produccion ? 'rend_kg_ha' : 'ebitda_ha';
-    const escala = produccion ? ESCALAS.rend_kg_ha : ESCALAS.ebitda_ha;
-    const filas = [...regs].sort((a, b) => (a[campo][t] || 0) - (b[campo][t] || 0));
+    // El ranking grafica la métrica que está pintando el mapa, no una fija: si
+    // el selector dice «Costos / kg», mirar un ranking de EBITDA/ha al lado del
+    // mapa obliga a cambiar de pregunta entre una mitad de la pantalla y otra.
+    const campo = produccion ? 'rend_kg_ha' : metrica;
+    const escala = ESCALAS[campo];
+    // Las variedades sin dato quedan fuera en vez de dibujarse como cero: una
+    // barra de largo cero en una temporada sin cosecha se lee como «no gana
+    // nada» y lo que pasa es que todavía no hay con qué calcularlo.
+    const filas = [...regs].filter(v => v[campo] && v[campo][t] != null)
+        .sort((a, b) => (a[campo][t] || 0) - (b[campo][t] || 0));
+    cv.parentElement.style.height = alto(filas.length * 0.73);
     grafico = new Chart(cv, {
         type: 'bar',
         data: {
@@ -1985,7 +2280,7 @@ function dibujarGrafico(regs) {
                     ...comun.plugins.tooltip,
                     callbacks: {
                         title: it => filas[it[0].dataIndex].variedad,
-                        label: it => (produccion ? miles(it.raw) + ' kg/ha' : usd(it.raw) + '/ha') +
+                        label: it => escala.fmt(it.raw) +
                             '  ·  ' + nf(filas[it.dataIndex].ha, 1) + ' ha'
                     }
                 }
@@ -1994,24 +2289,28 @@ function dibujarGrafico(regs) {
                 x: (() => {
                     const r = rangoY(filas.map(v => v[campo][t]));
                     return { ...base, min: r.min, max: r.max,
-                             ticks: { ...tick, stepSize: r.paso, maxTicksLimit: 6, maxRotation: 0, minRotation: 0,
-                                      callback: v => nf(v / 1000, 0) + 'k' } };
+                             ticks: { ...tick, stepSize: r.paso, maxRotation: 0, minRotation: 0,
+                                      callback: EJE[campo] || (v => nf(v, 0)) } };
                 })(),
                 y: { ...base, grid: { display: false }, ticks: { ...tick, autoSkip: false, font: { family: 'Fira Sans', size: 10 } } }
             }
         },
-        plugins: produccion ? [] : [lineaCero]
+        // La línea de cero sólo donde hay dos signos. En una escala que
+        // arranca en cero cae sobre el eje y no dice nada.
+        plugins: escala.tipo === 'divergente' ? [lineaCero] : []
     });
-    $('chartNota').textContent = (produccion ? 'kg/ha' : 'US$/ha') + ' en ' + MOD.temporadas[t] +
-        '. Mismos cortes y colores que el mapa.';
+    $('chartNota').textContent = esc(escala.titulo) + ' · ' + esc(escala.unidad) +
+        ' en ' + MOD.temporadas[t] + '. Mismos cortes y colores que el mapa.';
 }
 
 /* ── Selectores y modos ─────────────────────────────────────────────────── */
 function construirSelectores() {
     $('selTemporada').innerHTML = MOD.temporadas.slice(0, UTILES).map((s, i) =>
         `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === UTILES - 1 ? ' · plena producción' : ''}</option>`).join('');
-    $('selMetrica').innerHTML = METRICAS_FIN.map(m =>
-        `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`).join('');
+    $('selMetrica').innerHTML = METRICAS_FIN.map(g =>
+        `<optgroup label="${esc(g.grupo)}">` + g.campos.map(m =>
+            `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`
+        ).join('') + `</optgroup>`).join('');
     $('selSuelo').innerHTML = METRICAS_SUELO[subSuelo].map(m =>
         `<option value="${m}"${m === metricaSuelo ? ' selected' : ''}>${
             esc(m === 'clase' ? 'Tipo de suelo' : ESCALAS[m].etiqueta)}</option>`).join('');
@@ -2021,12 +2320,25 @@ function construirSelectores() {
    arranque también lo necesita: al cargar, la pestaña activa es Vista general y
    nadie ha hecho clic, así que sin esto el botón Modelo quedaba visible y abría
    un panel financiero vacío. */
-/* La barra de controles envuelve cuando el mapa se estrecha, y al ganar una
-   segunda fila se monta sobre el panel de leyenda, que arranca a la misma
-   altura. En vez de fijar un tope a ojo -que se queda corto o sobra según el
-   modo, porque cada uno trae distintos controles- se miden los dos y sólo se
-   baja la leyenda cuando de verdad se pisan. */
-function acomodarLeyenda() {
+/* Los dos encimamientos del chrome, resueltos igual: midiendo, no adivinando.
+   Un umbral en píxeles se queda corto o sobra según el modo, porque cada uno
+   trae distintos controles y distintos rótulos en la barra de métricas.
+
+   1) La barra de controles envuelve cuando el mapa se estrecha, y al ganar una
+      segunda fila se monta sobre el panel de leyenda, que arranca a la misma
+      altura.
+   2) La barra de métricas vive arriba a la derecha y las pestañas al centro.
+      Con el panel abierto quedan unos 700 px de mapa y las dos se pisaban: en
+      Vista general la barra tapaba media pestaña de «Suelos». Se baja al pie,
+      que es donde ya vive en los modos de dato.
+
+   Se mide con la clase quitada para leer la posición natural; si no, una vez
+   abajo nunca volvería a subir. */
+function acomodarChrome() {
+    document.body.classList.remove('stats-abajo');
+    const tb = $('tabs').getBoundingClientRect(), sb = $('statsBar').getBoundingClientRect();
+    if (sb.width && sb.left < tb.right + 10 && sb.top < tb.bottom) document.body.classList.add('stats-abajo');
+
     const leyenda = $('legend'), controles = document.querySelector('.controls');
     leyenda.style.top = '';
     const c = controles.getBoundingClientRect(), l = leyenda.getBoundingClientRect();
@@ -2044,7 +2356,7 @@ function sincronizarControles() {
     // El terreno y el suelo no cambian con la temporada: el selector sugeriría
     // que la pendiente se mueve entre 2025 y 2029.
     $('grpTemporada').hidden = !conTemporada;
-    acomodarLeyenda();
+    acomodarChrome();
 }
 
 function cambiarModo(nuevo) {
@@ -2058,7 +2370,7 @@ function togglePanel(abrir) {
     $('btnPanel').classList.toggle('abierta', abrir);
     if (abrir) pintarPanel();
     map.resize();
-    acomodarLeyenda();
+    acomodarChrome();
 }
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => cambiarModo(b.dataset.modo)));
@@ -2075,7 +2387,8 @@ $('segSuelo').querySelectorAll('button').forEach(b => b.addEventListener('click'
     repintar();
 }));
 $('selTemporada').addEventListener('change', e => { t = +e.target.value; repintar(); if (fijado) desfijar(); });
-$('btnPanel').addEventListener('click', () => togglePanel(!document.body.classList.contains('panel-abierto')));
+$('btnPanel').addEventListener('click', () => togglePanel(!panelAbierto()));
+$('panelAsa').addEventListener('click', () => togglePanel(true));
 $('mpCerrar').addEventListener('click', () => togglePanel(false));
 document.querySelectorAll('.mp-sect-head').forEach(h => h.addEventListener('click', () => {
     h.closest('.mp-sect').classList.toggle('abierta');
@@ -2087,32 +2400,37 @@ document.querySelectorAll('.mp-chart-tab').forEach(b => b.addEventListener('clic
     dibujarGrafico(clavesVisibles());
 }));
 
-$('btnTodo').addEventListener('click', () => { Object.keys(COLOR_VARIEDAD).forEach(k => visibles.add(k)); aplicarFiltro(); });
+$('btnTodo').addEventListener('click', () => { Object.keys(MODELOS_DE_VKEY).forEach(k => visibles.add(k)); aplicarFiltro(); });
 $('btnNada').addEventListener('click', () => { visibles.clear(); aplicarFiltro(); });
 
 const conmutar = (id, fn) => $(id).addEventListener('change', e => fn(e.target.checked));
 const vis = (capa, on) => { if (map.getLayer(capa)) map.setLayoutProperty(capa, 'visibility', on ? 'visible' : 'none'); };
 conmutar('swRelleno',   on => vis('cuarteles-fill', on));
 conmutar('swContorno',  on => vis('cuarteles-line', on));
-conmutar('swEtiquetas', on => vis('cuarteles-label', on));
+$('segEtiqueta').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    etiqueta = b.dataset.etq;
+    $('segEtiqueta').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
+    aplicarEtiqueta();
+}));
 conmutar('swLeyenda',   on => document.body.classList.toggle('legend-off', !on));
 conmutar('swMetricas',  on => { $('statsBar').style.display = on ? 'flex' : 'none'; });
 conmutar('swSatelital', on => { estiloSatelital = on; map.setStyle(on ? ESTILO_SAT : ESTILO_CLARO); });
 conmutar('swSombreado', on => vis('sombreado', on));
 conmutar('swRelieve',   on => aplicarRelieve(on));
 
+function cerrarVista() {
+    $('popVista').hidden = true;
+    $('btnVista').classList.remove('abierta');
+    $('btnVista').setAttribute('aria-expanded', 'false');
+}
 $('btnVista').addEventListener('click', () => {
-    const pop = $('popVista'), abierto = !pop.hidden;
-    pop.hidden = abierto;
-    $('btnVista').classList.toggle('abierta', !abierto);
-    $('btnVista').setAttribute('aria-expanded', String(!abierto));
+    if (!$('popVista').hidden) return cerrarVista();
+    $('popVista').hidden = false;
+    $('btnVista').classList.add('abierta');
+    $('btnVista').setAttribute('aria-expanded', 'true');
 });
 document.addEventListener('click', e => {
-    if (!e.target.closest('.fc-pop-wrap') && !$('popVista').hidden) {
-        $('popVista').hidden = true;
-        $('btnVista').classList.remove('abierta');
-        $('btnVista').setAttribute('aria-expanded', 'false');
-    }
+    if (!e.target.closest('.fc-pop-wrap') && !$('popVista').hidden) cerrarVista();
 });
 
 $('btnEncuadrar').addEventListener('click', () => encuadrar(true));
@@ -2120,11 +2438,26 @@ $('btnEncuadrar').addEventListener('click', () => encuadrar(true));
 /* El relleno se calcula contra el tamaño real del mapa, no con números fijos.
    Con el panel abierto el mapa baja a ~700 px y un relleno izquierdo de 300 px
    —el ancho de la leyenda— más 60 a la derecha se come más de la mitad del
-   ancho: ahí Mapbox deja de encuadrar y el predio se sale de la vista. */
+   ancho: ahí Mapbox deja de encuadrar y el predio se sale de la vista.
+
+   Y bajo 1180 px el panel deja de quitarle ancho al mapa y se monta encima: el
+   canvas sigue midiendo lo mismo, así que «Ver todo el predio» encuadraba
+   contra un ancho que en pantalla no existe y dejaba el tercio oriente —los
+   cerezos del cerro— escondido detrás del panel. Cuánto tapa se mide, no se
+   supone: así vale igual cuando el panel sí cede ancho (tapa = 0). */
 function relleno() {
     const c = map.getContainer(), w = c.offsetWidth, h = c.offsetHeight;
-    const izq = document.body.classList.contains('legend-off') ? 24 : Math.min(300, Math.round(w * 0.3));
-    const der = Math.min(60, Math.round(w * 0.08));
+    const tapa = panelAbierto()
+        ? Math.max(0, Math.round(c.getBoundingClientRect().right - $('modeloPanel').getBoundingClientRect().left))
+        : 0;
+    let der = tapa + Math.min(60, Math.round(w * 0.08));
+    let izq = document.body.classList.contains('legend-off') ? 24 : Math.min(300, Math.round(w * 0.3));
+    // Si entre los dos no dejan aire, el que cede es el de la leyenda: la
+    // leyenda sólo estorba y se puede plegar, mientras que lo que queda bajo el
+    // panel no hay forma de verlo.
+    const tope = Math.round(w * 0.72);
+    if (izq + der > tope) izq = Math.max(24, tope - der);
+    if (izq + der > tope) der = Math.max(24, tope - izq);
     return {
         left: izq, right: der,
         top: Math.min(108, Math.round(h * 0.15)),
@@ -2157,20 +2490,27 @@ const etiquetaBusqueda = p => {
     return p.cuartel + ' — ' + p.variedad + (choca ? ' · ' + p.uid : '');
 };
 
-$('inpBuscar').addEventListener('input', e => {
-    const q = e.target.value.trim().toLowerCase();
+/* Dos niveles de calce. El exacto es el que dispara solo, mientras se escribe:
+   es lo que pasa al elegir una sugerencia de la lista. El aproximado —prefijo
+   de código o de variedad— espera a Enter o a que el campo pierda el foco,
+   porque si no el mapa volaba en cada tecla: escribir «5218» hacía tres viajes,
+   uno por cada dígito a partir del segundo, y ninguno al cuartel buscado. */
+function buscar(texto, permisivo) {
+    const q = texto.trim().toLowerCase();
     if (q.length < 2) return;
     const norm = x => x.toLowerCase();
-    const candidatos = GEO.cuarteles.features;
-    // Primero el calce exacto de la sugerencia; después el código completo; y
-    // recién ahí un prefijo, para que escribir «5218» sin el sufijo igual lleve
-    // a alguna parte en vez de no hacer nada.
-    const f = candidatos.find(x => norm(etiquetaBusqueda(x.properties)) === q)
-        || candidatos.find(x => norm(x.properties.cuartel) === q)
-        || candidatos.find(x => x.properties.cuarteles.some(c => norm(c) === q))
-        || candidatos.find(x => norm(x.properties.cuartel).startsWith(q))
-        || candidatos.find(x => norm(x.properties.variedad).startsWith(q));
-    if (!f) return;
+    const c = GEO.cuarteles.features;
+    let f = c.find(x => norm(etiquetaBusqueda(x.properties)) === q)
+        || c.find(x => norm(x.properties.cuartel) === q)
+        || c.find(x => x.properties.cuarteles.some(y => norm(y) === q));
+    if (!f && permisivo) {
+        f = c.find(x => norm(x.properties.cuartel).startsWith(q))
+            || c.find(x => norm(x.properties.variedad).startsWith(q))
+            || c.find(x => norm(x.properties.variedad).includes(q));
+    }
+    // Un Enter que no hace nada se lee como que la app se colgó.
+    if (!f) { if (permisivo) avisar('No hay ningún cuartel ni variedad que calce con «' + texto.trim() + '».'); return; }
+
     const k = vkey(f.properties.especie, f.properties.variedad);
     if (!visibles.has(k)) { visibles.add(k); aplicarFiltro(); }
     map.flyTo({ center: f.properties.centro, zoom: 16.4, duration: 900 });
@@ -2179,6 +2519,12 @@ $('inpBuscar').addEventListener('input', e => {
         fijado = f.properties.uid; setEstado(fijado, 'fijo', true);
         mostrarFicha(f.properties, map.project(f.properties.centro), true);
     });
+}
+
+$('inpBuscar').addEventListener('input', e => buscar(e.target.value, false));
+$('inpBuscar').addEventListener('change', e => buscar(e.target.value, true));
+$('inpBuscar').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); buscar(e.target.value, true); }
 });
 
 let relojAviso = null;
@@ -2190,7 +2536,31 @@ function avisar(texto) {
     relojAviso = setTimeout(() => { a.hidden = true; }, 4200);
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') desfijar(); });
+/* Atajos. Sólo cuando el foco no está en un campo: si no, escribir «5218-D» en
+   el buscador cambiaría de pestaña cuatro veces antes de llegar a la D. Están
+   listados en Vista ▸ Atajos, porque un atajo que nadie sabe que existe no es
+   un atajo. */
+const TECLA_MODO = { '1': 'general', '2': 'produccion', '3': 'financiero', '4': 'suelos' };
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        desfijar();
+        if (!$('popVista').hidden) cerrarVista();
+        return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // El objetivo de un keydown a nivel de documento no siempre es un Element
+    // -puede ser el propio document-, y ahi .closest no existe y el manejador
+    // reventaba entero antes de llegar a ningun atajo. Se cae a activeElement,
+    // que es lo que de verdad interesa: si el foco esta en un campo, la tecla
+    // es texto y no un atajo.
+    const foco = e.target instanceof Element ? e.target : document.activeElement;
+    if (foco && foco.closest('input, select, textarea, [contenteditable]')) return;
+    if (TECLA_MODO[e.key]) return cambiarModo(TECLA_MODO[e.key]);
+    const k = e.key.toLowerCase();
+    if (k === 'd') togglePanel(!panelAbierto());
+    else if (k === 'l') { $('swLeyenda').checked = !$('swLeyenda').checked; $('swLeyenda').dispatchEvent(new Event('change')); }
+    else if (k === 'f') encuadrar(true);
+});
 </script>
 </body>
 </html>

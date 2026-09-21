@@ -32,6 +32,17 @@ import openpyxl
 RAIZ = Path(__file__).resolve().parent.parent
 LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 
+# La consola de Windows sale en cp1252 y revienta con cualquier caracter fuera
+# de esa tabla. El JSON ya estaba escrito cuando eso pasaba, asi que el script
+# moria justo mientras contaba que habia terminado bien: el peor momento para
+# morir, porque quien lo corre concluye que no se genero nada. Se fuerza utf-8
+# y, si la consola no puede con algun caracter, se reemplaza en vez de abortar.
+for flujo in (sys.stdout, sys.stderr):
+    try:
+        flujo.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 def sin_tildes(s):
     s = unicodedata.normalize("NFD", str(s))
     return "".join(c for c in s if unicodedata.category(c) != "Mn")
@@ -529,6 +540,29 @@ def main():
         reg["kg_por_unidad"] = factor
         reg["rend_kg_ha"] = [None if v is None else round(v * factor) for v in reg["rend_ha"]]
 
+        # ── Economia unitaria ─────────────────────────────────────────────
+        # Lo mismo que ya esta por hectarea, pero por kilo producido. El kilo
+        # es la unidad en que se negocia la fruta, asi que es la unica forma de
+        # comparar una cereza con una parra sin que la densidad de plantacion
+        # se meta en el medio: dos variedades con el mismo costo/ha pueden
+        # tener el doble de costo/kg si una rinde la mitad.
+        #
+        # Los kilos van convertidos por kg_por_unidad: la uva de mesa se modela
+        # en cajas de 8,2 kg, y un US$/caja al lado de un US$/kg de cereza no
+        # compara nada. Sin cosecha no hay denominador y el valor es None, no
+        # cero: un cero diria "sale gratis" donde lo que pasa es que no hay con
+        # que dividir.
+        kg = [None if p is None else p * factor for p in reg["produccion"]]
+        reg["kg"] = [None if k is None else round(k) for k in kg]
+        por_kg = lambda serie: [None if not k else round((x or 0) / k, 4)
+                                for x, k in zip(serie, kg)]
+        reg["ingreso_kg"] = por_kg(reg["ingresos"])
+        reg["costo_kg"] = por_kg(reg["costos"])
+        # El margen por kilo es el EBITDA por kilo: lo que deja cada kilo
+        # despues de costos. No es el margen sobre ventas -ese ya esta, y es
+        # una razon sin unidad-, es plata por kilo.
+        reg["ebitda_kg"] = por_kg(reg["ebitda"])
+
     # ── Cruce con los cuarteles del KMZ ───────────────────────────────────
     geo = json.loads((RAIZ / "geo_data.json").read_text(encoding="utf-8"))
     cuarteles_por_clave = {}
@@ -563,28 +597,37 @@ def main():
         "ingresos": [round(x) for x in idx("ingresos")],
         "costos": [round(x) for x in idx("costos")],
         "ebitda": [round(x) for x in idx("ebitda")],
+        # Kilos convertidos, no unidades del libro: sumar cajas de uva con
+        # kilos de cereza daria un total que no significa nada.
+        "kg": [round(x) for x in idx("kg")],
     }
     totales["ebitda_ha"] = [round(e / ha_total, 1) for e in totales["ebitda"]]
     totales["margen"] = [None if not i else round(e / i, 4)
                          for i, e in zip(totales["ingresos"], totales["ebitda"])]
+    for campo, fuente in (("ingreso_kg", "ingresos"), ("costo_kg", "costos"), ("ebitda_kg", "ebitda")):
+        totales[campo] = [None if not k else round(x / k, 4)
+                          for x, k in zip(totales[fuente], totales["kg"])]
 
     por_especie = {}
     for reg in variedades.values():
         e = por_especie.setdefault(reg["especie"], {
             "especie": reg["especie"], "variedades": 0, "ha": 0.0,
-            "produccion": [0.0] * N_TEMPORADAS, "ingresos": [0.0] * N_TEMPORADAS,
+            "produccion": [0.0] * N_TEMPORADAS, "kg": [0.0] * N_TEMPORADAS,
+            "ingresos": [0.0] * N_TEMPORADAS,
             "costos": [0.0] * N_TEMPORADAS, "ebitda": [0.0] * N_TEMPORADAS,
         })
         e["variedades"] += 1
         e["ha"] = round(e["ha"] + reg["ha"], 3)
-        for campo in ("produccion", "ingresos", "costos", "ebitda"):
+        for campo in ("produccion", "kg", "ingresos", "costos", "ebitda"):
             for i in range(N_TEMPORADAS):
                 e[campo][i] += reg[campo][i] or 0
     for e in por_especie.values():
-        for campo in ("produccion", "ingresos", "costos", "ebitda"):
+        for campo in ("produccion", "kg", "ingresos", "costos", "ebitda"):
             e[campo] = [round(x) for x in e[campo]]
         e["ebitda_ha"] = [round(x / e["ha"], 1) for x in e["ebitda"]]
         e["margen"] = [None if not i else round(x / i, 4) for i, x in zip(e["ingresos"], e["ebitda"])]
+        for campo, fuente in (("ingreso_kg", "ingresos"), ("costo_kg", "costos"), ("ebitda_kg", "ebitda")):
+            e[campo] = [None if not k else round(x / k, 4) for x, k in zip(e[fuente], e["kg"])]
 
     # ── Conciliacion de superficies ───────────────────────────────────────
     # El puente de la tasacion al modelo. Los tres numeros que Rolando usa para

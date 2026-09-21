@@ -153,14 +153,41 @@ etiqueta de cuartel y filtro por rama.
 Cuatro pestañas, con la misma leyenda-árbol para encender y apagar cualquier rama.
 
 **Vista general** — identidad. Colorea por especie (siete tonos) o por variedad
-(el tono de su especie, escalonado en luminosidad). El mapa se lee primero por
-especie y después por variedad.
+(el tono de su especie, escalonado en luminosidad y con un giro corto de tono).
+El mapa se lee primero por especie y después por variedad. En *Vista ▸ Escrito
+sobre el cuartel* se puede cambiar la etiqueta del polígono de código de cuartel
+a **nombre de variedad**, que es lo que permite leer el predio por variedad sin
+tener que ir al color; la variedad entra antes en zoom y con letra más grande,
+porque «Sweet Celebration» a 9 px no se lee, se adivina.
 
 **Producción** — rendimiento en kg/ha por temporada, rampa secuencial.
 
-**Financiero** — EBITDA/ha, ingresos/ha, costos/ha o margen EBITDA, por
-temporada. EBITDA y margen usan una escala divergente en torno a cero: rojo bajo
-cero, azul sobre cero.
+**Financiero** — dos familias de métricas, y el modo entero sigue a la que se
+elija: la barra de métricas, la tabla del panel y el ranking por variedad hablan
+todos en la misma unidad, porque dos denominadores en la misma pantalla obligan
+a leer la etiqueta de cada número antes de poder comparar dos.
+
+- *Por hectárea*: EBITDA/ha, ingresos/ha, costos/ha o margen EBITDA sobre ventas.
+- *Por kilo producido*: margen/kg, ingresos/kg y costos/kg.
+
+El kilo es la unidad en que se negocia la fruta, así que es la única forma de
+comparar una cereza con una parra sin que la densidad de plantación se meta en
+el medio: dos variedades con el mismo costo/ha pueden tener el doble de
+costo/kg si una rinde la mitad. Los kilos van siempre convertidos —la uva de
+mesa se modela en cajas de 8,2 kg—, y donde no hay cosecha no hay denominador:
+el valor queda vacío y no en cero, porque un cero diría «sale gratis» donde lo
+que pasa es que no hay con qué dividir.
+
+Las razones **no se promedian, se recomponen**. Un cuartel mixto lleva varias
+variedades: el promedio ponderado por hectárea de dos US$/kg no es el costo de
+ningún kilo, porque la variedad que más rinde aporta más kilos al total, no más
+hectáreas. Cada razón declara su numerador y su denominador y cada uno se suma
+por su lado. Con eso, el agregado del mapa con todo encendido reproduce exacto
+los totales del modelo: 5.584.758 kg, 1,2121 de ingreso, 1,0409 de costo y
+0,1084 de margen por kilo en plena producción.
+
+EBITDA, margen sobre ventas y margen/kg usan una escala divergente en torno a
+cero: rojo bajo cero, azul sobre cero.
 
 **Suelos** — se abre por dos caras, en una subpestaña. *Tipo de suelo (físico)*
 trae lo que dice el plano de la hacienda: el tipo, con su simbología, o la
@@ -187,6 +214,25 @@ barato mientras el archivo no cambie, pero sin eso el navegador servía los dato
 de la corrida anterior y no había manera de notarlo desde la pantalla: los
 números seguían siendo coherentes entre sí, sólo que viejos.
 
+### Encontrar una variedad en el mapa
+
+La leyenda lista cuarenta ramas y varios nombres se repiten entre especies. Leer
+«Santina» y no saber a qué parte del cerro apunta era el hueco más grande que
+tenía: al pasar el cursor por una fila, **sus cuarteles se resaltan en el mapa**
+con un contorno grueso, y el botón **«solo»** que aparece en la fila la deja
+sola encendida —y la vuelve a soltar si ya lo estaba—. Apagar treinta y dos
+variedades a mano para poder mirar una era el camino largo del mismo viaje.
+
+El buscador tiene dos niveles de calce. El exacto dispara solo, mientras se
+escribe, que es lo que pasa al elegir una sugerencia de la lista; el aproximado
+—prefijo de código o de variedad— espera a `Enter`. Antes el mapa volaba en cada
+tecla: escribir «5218» hacía tres viajes, uno por cada dígito a partir del
+segundo, y ninguno al cuartel buscado.
+
+Hay atajos, listados en *Vista ▸ Atajos*: `1`–`4` cambian de pestaña, `D` abre y
+cierra el panel, `L` la leyenda, `F` encuadra el predio y `Esc` suelta la ficha.
+No disparan cuando el foco está en un campo de texto.
+
 ### Cada pantalla muestra lo suyo
 
 La regla es que nada se diga dos veces. Los números de cabecera viven en la barra
@@ -200,10 +246,18 @@ margen en Financiero, pendiente y exposición en Terreno, tipo y textura en
 Suelos. Antes apilaba los cinco bloques en todos los modos y llenaba media
 pantalla con datos que nadie había pedido.
 
-**El panel** —el botón *Datos*— acompaña a las cuatro pestañas y trae dos cosas: un gráfico y una tabla, los dos del modo activo:
-hectáreas por especie en Vista general, la serie por temporada y el ranking por
-variedad en Producción y Financiero, el reparto por clase de pendiente o por
-tipo de suelo en Suelos.
+**El panel arranca cerrado.** Lo primero que se viene a ver es el mapa, y 392 px
+de tablas encima de eso es una respuesta antes de que nadie haya hecho la
+pregunta. Se abre con el asa de la derecha, con el botón *Datos* de la barra de
+controles o con la tecla `D`.
+
+**El panel** acompaña a las cuatro pestañas y trae dos cosas: un gráfico y una
+tabla, los dos del modo activo: hectáreas por especie en Vista general, la serie
+por temporada y el ranking por variedad en Producción y Financiero, el reparto
+por clase de pendiente o por tipo de suelo en Suelos. El ranking grafica **la
+métrica que está pintando el mapa**, no una fija: si el selector dice «Costos /
+kg», mirar un ranking de EBITDA/ha al lado obliga a cambiar de pregunta entre
+una mitad de la pantalla y la otra.
 
 Los repartos de terreno y suelo se cuentan en **cuarteles**, no en hectáreas: el
 DEM y el plano clasifican polígonos, y repartir las hectáreas de una variedad
@@ -223,7 +277,28 @@ recta para decir que el modelo asume plena producción—; en barras agrupadas y
 sólo con las temporadas que cambian se ve de una cuánto sube el EBITDA y cuánto
 de los ingresos se lleva el costo. El rango del eje se calcula en vez de
 dejárselo al automático: con pasos gruesos, un EBITDA de −0,17 M arrastraba el
-eje hasta −2 M y dejaba en blanco un quinto del gráfico.
+eje hasta −2 M y dejaba en blanco un quinto del gráfico. Y el paso calculado es
+el que manda: `maxTicksLimit` lo pisa y deja que Chart.js invente el suyo, que
+en el ranking por kilo salía con cortes como −0,80 y −0,35.
+
+### El chrome se acomoda midiendo, no adivinando
+
+Dos barras flotan sobre el mapa y las dos se encimaban con algo cuando el ancho
+útil bajaba. La de controles envuelve en dos filas y se montaba sobre el panel
+de leyenda; la de métricas vive arriba a la derecha y, con el panel abierto,
+tapaba media pestaña de «Suelos». En vez de un umbral en píxeles —que se queda
+corto o sobra según el modo, porque cada uno trae distintos controles y
+distintos rótulos— se miden las cajas y se mueve sólo la que de verdad se pisa.
+Para que la medición valga, las tres barras dejaron de animar su posición: el
+mapa ya cedía el ancho de una sola vez, así que animar el chrome hacía que el
+mapa saltara y las barras llegaran 200 ms después, y peor, que se midiera la
+posición vieja a mitad de la animación.
+
+Por lo mismo, el relleno del encuadre mide **cuánto tapa el panel** en vez de
+suponerlo. Bajo 1180 px el panel deja de quitarle ancho al mapa y se monta
+encima: el canvas sigue midiendo lo mismo, así que «Ver todo el predio»
+encuadraba contra un ancho que en pantalla no existe y dejaba el tercio oriente
+—los cerezos del cerro— escondido detrás del panel.
 
 ---
 
