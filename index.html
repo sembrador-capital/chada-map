@@ -153,7 +153,8 @@ body.panel-abierto #map { right:392px; }
     background:var(--sem-surface); border:var(--sem-border-hair);
     border-bottom:2px solid var(--sem-line);
     border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-sm);
-    max-width:min(1040px, calc(100vw - 32px)); overflow-x:auto; scrollbar-width:none;
+    width:max-content; max-width:min(1040px, calc(100vw - 32px));
+    overflow-x:auto; scrollbar-width:none;
 }
 body.panel-abierto .tabs { left:calc((100% - 392px) / 2); }
 .tabs::-webkit-scrollbar { display:none; }
@@ -174,12 +175,13 @@ use[href^="#ic-"] { stroke:currentColor; }
 /* ── COMPONENTE 2 · Controles ───────────────────────────────────────────── */
 .controls {
     position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:var(--z-controls);
-    padding:7px 11px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    padding:7px 10px; display:flex; gap:7px; align-items:center; flex-wrap:wrap;
     justify-content:center;
+    width:max-content; max-width:calc(100vw - 32px);
     background:var(--sem-surface); border:var(--sem-border-hair);
     border-radius:var(--sem-radius-lg); box-shadow:var(--sem-shadow-md);
 }
-body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
+body.panel-abierto .controls { left:calc((100% - 392px) / 2); max-width:calc(100vw - 424px); }
 .fc-group { display:flex; flex-direction:column; gap:3px; }
 
 .fc-label {
@@ -193,11 +195,11 @@ body.panel-abierto .controls { left:calc((100% - 392px) / 2); }
     transition:border-color 0.15s, box-shadow 0.15s;
 }
 .fc-select {
-    padding:0 27px 0 10px; min-width:150px; cursor:pointer; appearance:none;
+    padding:0 25px 0 9px; min-width:132px; cursor:pointer; appearance:none;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10' fill='none'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%236D7C86' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 11px center;
 }
-.fc-search { padding:0 10px; min-width:168px; }
+.fc-search { padding:0 9px; min-width:148px; }
 .fc-select:hover, .fc-search:hover { border:var(--sem-border-strong); }
 .fc-select:focus, .fc-search:focus { border:var(--sem-border-accent); box-shadow:var(--sem-focus-ring); }
 .fc-divider { width:1px; align-self:stretch; background:var(--sem-line); margin:0 2px; }
@@ -484,6 +486,14 @@ body.panel-abierto .modelo-panel { display:flex; }
 .mp-tabla tbody tr { cursor:pointer; }
 .mp-tabla tbody tr:hover td { background:var(--sem-beige-wash); }
 .mp-tabla .lg-dot { flex:0 0 8px; width:8px; height:8px; }
+/* La unidad es de la FILA, no de la celda: repetir «cj» en tres columnas por
+   treinta y tres filas llena la tabla de ruido, y sin ponerla en ninguna parte
+   quedaban cajas y kilos en la misma columna sin decirlo. */
+.u-tag {
+    flex:0 0 auto; margin-left:4px; padding:0 3px; border-radius:3px;
+    font-size:8.5px; font-weight:600; letter-spacing:0.03em;
+    color:var(--sem-text-2); background:var(--sem-slate-wash); border:var(--sem-border-soft);
+}
 
 .mp-conc { width:100%; border-collapse:collapse; font-size:10.5px; font-variant-numeric:tabular-nums; }
 .mp-conc td { padding:4px 2px; border-bottom:var(--sem-border-soft); vertical-align:top; }
@@ -621,15 +631,15 @@ body.panel-abierto .data-stamp { right:408px; }
     <div class="fc-group" id="grpSubProd" hidden>
         <label class="fc-label">Ver</label>
         <div class="seg" id="segProd" role="group" aria-label="Qué producción mirar">
-            <button type="button" data-sub="modelo" class="activo">Proyectada (modelo)</button>
-            <button type="button" data-sub="cosecha">Cosecha real</button>
+            <button type="button" data-sub="modelo" class="activo" title="Rendimiento que proyecta el modelo financiero">Proyectada</button>
+            <button type="button" data-sub="cosecha" title="Rendimiento efectivamente cosechado, de la hoja Fuente 2 Rendimientos">Cosechada</button>
         </div>
     </div>
     <div class="fc-group" id="grpSubSuelo" hidden>
         <label class="fc-label">Ver</label>
         <div class="seg" id="segSuelo" role="group" aria-label="Qué mirar del suelo">
-            <button type="button" data-sub="fisico" class="activo">Tipo de suelo (físico)</button>
-            <button type="button" data-sub="terreno">Terreno</button>
+            <button type="button" data-sub="fisico" class="activo" title="Tipo de suelo según el plano de la hacienda (análisis físico)">Tipo de suelo</button>
+            <button type="button" data-sub="terreno" title="Pendiente y elevación, desde el modelo de elevación">Terreno</button>
         </div>
     </div>
     <div class="fc-group" id="grpSuelo" hidden>
@@ -907,6 +917,18 @@ const ESCALAS = {
         tokens: ['--seq-1', '--seq-2', '--seq-3', '--seq-4', '--seq-5'],
         fmt: x => miles(x) + ' kg'
     },
+    /* La uva de mesa no se mide en kilos: se modela, se vende y se habla en
+       CAJAS de 8,2 kg. «22.834 kg/ha» no es un número que nadie use para
+       describir un parrón. Cuando todo lo encendido comparte esa unidad, el
+       mapa entero pasa a cajas y usa esta escala; los cortes son redondos y
+       propios, no los de kilos divididos por 8,2, que no caerían en ninguna
+       parte reconocible. El rango real del predio va de 265 a 5.700 cajas/ha. */
+    rend_cajas_ha: {
+        etiqueta: 'Rendimiento', titulo: 'Rendimiento por hectárea', unidad: 'cajas de 8,2 kg por ha', tipo: 'secuencial',
+        cortes: [1000, 2000, 3000, 4000],
+        tokens: ['--seq-1', '--seq-2', '--seq-3', '--seq-4', '--seq-5'],
+        fmt: x => miles(x) + ' cj'
+    },
     /* Los cortes de pendiente son los de manejo frutal, no cuantiles: sobre 15%
        cambia la maquinaria, sobre 25% cambia el sistema de plantación. Una
        escala que se moviera con los datos escondería justamente eso. */
@@ -988,6 +1010,36 @@ let etiqueta = 'cuartel';
 
 const panelAbierto = () => document.body.classList.contains('panel-abierto');
 
+/* ── Unidad de producción ───────────────────────────────────────────────────
+   El modelo lleva la uva de mesa en cajas de 8,2 kg y todo lo demás en kilos.
+   Mientras lo que está encendido comparta unidad se habla en la suya; si hay
+   mezcla se cae a kilos, porque cajas y kilos no se suman ni caben en la misma
+   escala de color. Ningún cuartel mezcla las dos —la uva de mesa no comparte
+   paño con otra especie—, así que la ficha de un cuartel SIEMPRE puede hablar
+   en la unidad del modelo, haya o no mezcla en el resto de la pantalla. */
+let UNIDAD = { factor: 1, corta: 'kg', larga: 'kg/ha', escala: null, mezcla: false };
+
+const factorDe = regs => {
+    const fs = new Set(regs.map(v => v.kg_por_unidad || 1));
+    return fs.size === 1 ? [...fs][0] : 1;
+};
+const unidadCorta = f => f > 1 ? 'cj' : 'kg';
+const unidadLarga = f => f > 1 ? 'cajas/ha' : 'kg/ha';
+/* Un rendimiento guardado en kilos, dicho en la unidad que toca. */
+const enUnidad = (kg, f) => kg == null ? null : kg / f;
+const rend = (kg, f) => kg == null ? '—' : miles(kg / f) + ' ' + unidadCorta(f) + '/ha';
+
+function actualizarUnidad() {
+    const regs = clavesVisibles();
+    const f = factorDe(regs);
+    const fs = new Set(regs.map(v => v.kg_por_unidad || 1));
+    UNIDAD = {
+        factor: f, corta: unidadCorta(f), larga: unidadLarga(f),
+        escala: f > 1 ? ESCALAS.rend_cajas_ha : ESCALAS.rend_kg_ha,
+        mezcla: fs.size > 1
+    };
+}
+
 /* Dentro de Suelos, qué cara se está mirando. */
 const verTerreno = () => modo === 'suelos' && subSuelo === 'terreno';
 const verFisico  = () => modo === 'suelos' && subSuelo === 'fisico';
@@ -995,15 +1047,16 @@ const verFisico  = () => modo === 'suelos' && subSuelo === 'fisico';
 const verCosecha = () => modo === 'produccion' && subProd === 'cosecha';
 const temporadaActual = () => verCosecha() ? MOD.cosechas.temporadas[tc] : MOD.temporadas[t];
 
-const escalaActiva = () => modo === 'produccion' ? ESCALAS.rend_kg_ha
+const escalaActiva = () => modo === 'produccion' ? UNIDAD.escala
     : modo === 'suelos' ? ESCALAS[metricaSuelo] : ESCALAS[metrica];
 
 /* El terreno viene del DEM y el suelo del plano: los dos van escritos en el
    propio cuartel y no se ponderan ni se cruzan con el modelo. */
 const valorPintado = p => verTerreno() ? (p[metricaSuelo] ?? null)
     : verFisico() ? ((obj(p.suelo) || {}).prof_cm ?? null)
-    : verCosecha() ? valorCosecha(p, tc)
-    : valorCuartel(p, modo === 'produccion' ? 'rend_kg_ha' : metrica, t);
+    : verCosecha() ? enUnidad(valorCosecha(p, tc), UNIDAD.factor)
+    : modo === 'produccion' ? enUnidad(valorCuartel(p, 'rend_kg_ha', t), UNIDAD.factor)
+    : valorCuartel(p, metrica, t);
 
 /* El color de un cuartel: identidad, simbología del plano o clase de escala. */
 function colorCuartel(p) {
@@ -1049,6 +1102,7 @@ Promise.all([traer('geo_data.json'), traer('modelo_data.json')]).then(([geo, mod
     (GEO.suelos ? GEO.suelos.simbologia : []).forEach(s => { SUELO[s.clase] = s; });
 
     t = UTILES - 1;
+    actualizarUnidad();
     // La cosecha arranca en la última temporada que tenga kilos registrados:
     // abrir en 2023-2024 mostraría el campo a medio entrar en producción como
     // si fuera su estado actual.
@@ -1455,40 +1509,44 @@ function mostrarFicha(p, punto, fija = false) {
         const real = valorCosecha(p, tc);
         const meta = valorCuartel(p, 'rend_kg_ha', UTILES - 1);
         const kg = conDato.reduce((a, v) => a + v.cosecha.kg[tc], 0);
+        // La unidad del cuartel, no la de la pantalla: ningún paño mezcla cajas
+        // con kilos, así que su ficha siempre puede hablar en la del modelo.
+        const f = factorDe(regs.length ? regs : conDato);
         cuerpo = conDato.length
-            ? kv('Cosechado', miles(real) + ' kg/ha') +
-              kv('Total', miles(kg) + ' kg') +
-              (meta ? kv('Plena producción', miles(meta) + ' kg/ha') +
+            ? kv('Cosechado', rend(real, f)) +
+              kv('Total', miles(kg / f) + (f > 1 ? ' cajas' : ' kg')) +
+              (meta ? kv('Plena producción', rend(meta, f)) +
                       kv('Avance', pct(real / meta), real < meta ? ' neg' : ' pos') : '') +
               // Las tres temporadas seguidas, que es lo que muestra si el
               // cuartel viene subiendo o si tuvo un año malo.
               sec('Por temporada', MOD.cosechas.temporadas.map((nom, i) => {
                   const v = valorCosecha(p, i);
-                  return chip(esc(nom.replace('-', '/')), v == null ? 'sin registro' : miles(v) + ' kg/ha');
+                  return chip(esc(nom.replace('-', '/')), v == null ? 'sin registro' : rend(v, f));
               }).join('')) +
               (regs.length > 1 ? sec('Por variedad', conDato.map(v =>
-                  chip(esc(v.variedad), miles(v.cosecha.rend_kg_ha[tc]) + ' kg/ha')).join('')) : '')
+                  chip(esc(v.variedad), rend(v.cosecha.rend_kg_ha[tc], v.kg_por_unidad || 1))).join('')) : '') +
+              (f > 1 ? `<div class="card-suelo-desc">Cajas de 8,2 kg, que es como el modelo lleva la uva de mesa.</div>` : '')
             : '';
         if (!conDato.length) avisos.push('Sin cosecha registrada en esta temporada.');
         const agr = conDato.filter(v => v.cosecha.agrupada);
-        if (agr.length) avisos.push('La hoja mide juntas <b>' + esc(agr[0].cosecha.agrupada) +
-            '</b>: las dos llevan el rendimiento del conjunto.');
+        if (agr.length) avisos.push('<i>Fuente 2</i> mide juntas <b>' + esc(agr[0].cosecha.agrupada) +
+            '</b>; el total se reparte entre las dos con el detalle de la Ficha Técnica, que sí las separa.');
         if (conDato.some(v => v.cosecha.difiere_de_ficha[tc])) {
             avisos.push('<b>Las dos fuentes no coinciden</b> en esta temporada: <i>Fuente 2 Rendimientos</i> y la Ficha Técnica dan cifras distintas. Acá va la de Fuente 2.');
         }
 
     } else if (modo === 'produccion') {
         const ultima = MOD.temporadas.length - 1;
-        const cajas = regs.some(v => (v.kg_por_unidad || 1) > 1);
+        const f = factorDe(regs);
         const hoy = valorCuartel(p, 'rend_kg_ha', t), plena = valorCuartel(p, 'rend_kg_ha', ultima);
         // La fila de plena producción sólo aparece si dice algo distinto: en una
         // variedad ya adulta repetiría el mismo número dos veces.
         cuerpo =
-            kv('Rendimiento', miles(hoy) + ' kg/ha') +
-            (Math.round(plena) !== Math.round(hoy) ? kv('En plena producción', miles(plena) + ' kg/ha') : '') +
-            (cajas ? `<div class="card-suelo-desc">El modelo lleva esta variedad en cajas de 8,2 kg; acá va convertido.</div>` : '') +
+            kv('Rendimiento', rend(hoy, f)) +
+            (Math.round(plena) !== Math.round(hoy) ? kv('En plena producción', rend(plena, f)) : '') +
+            (f > 1 ? `<div class="card-suelo-desc">Cajas de 8,2 kg, que es como el modelo lleva la uva de mesa.</div>` : '') +
             (regs.length > 1 ? sec('Por variedad', regs.map(v =>
-                chip(esc(v.variedad), miles(v.rend_kg_ha[t]) + ' kg/ha')).join('')) : '');
+                chip(esc(v.variedad), rend(v.rend_kg_ha[t], v.kg_por_unidad || 1))).join('')) : '');
         if (regs.some(v => v.produccion_libro)) avisos.push('Producción despejada desde los ingresos: el bloque del libro trae corridas las filas de Uva Vinífera.');
 
     } else if (modo === 'financiero') {
@@ -1748,6 +1806,9 @@ function resaltar(claves) {
 
 /* El filtro es la única puerta: capas, métricas, leyenda y panel leen el mismo set. */
 function aplicarFiltro() {
+    // Antes que nada: cambiar qué ramas están encendidas puede cambiar la
+    // unidad en que habla toda la pestaña.
+    actualizarUnidad();
     const f = exprFiltro();
     ['cuarteles-fill', 'cuarteles-line', 'cuarteles-label'].forEach(id => {
         if (map.getLayer(id)) map.setFilter(id, f);
@@ -1756,10 +1817,14 @@ function aplicarFiltro() {
         const p = GEO.cuarteles.features.find(x => x.properties.uid === fijado);
         if (p && !visibles.has(vkey(p.properties.especie, p.properties.variedad))) desfijar();
     }
-    pintarLeyenda(); pintarMetricas(); pintarPanel();
+    // La escala también: depende del filtro por dos vías. La leyenda de tipos de
+    // suelo cuenta los cuarteles encendidos, y en Producción la unidad -kilos o
+    // cajas- sale de qué ramas quedaron a la vista.
+    pintarLeyenda(); pintarEscala(); pintarMetricas(); pintarPanel();
 }
 
 function repintar() {
+    actualizarUnidad();
     if (map.getLayer('cuarteles-fill')) map.setPaintProperty('cuarteles-fill', 'fill-color', exprColor());
     pintarDots(); pintarEscala(); pintarMetricas(); pintarPanel();
 }
@@ -1865,8 +1930,8 @@ function pintarMetricasBarra() {
         $('statsBar').innerHTML = `
             <div class="stat"><span class="stat-val">${nf(ha, 1)}</span><span class="stat-lbl">ha cosechadas</span></div>
             <div class="stat"><span class="stat-val">${nf(kg / 1000, 0)}</span><span class="stat-lbl">Toneladas</span></div>
-            <div class="stat"><span class="stat-val">${miles(real)}</span><span class="stat-lbl">kg / ha</span></div>
-            <div class="stat"><span class="stat-val">${miles(meta)}</span><span class="stat-lbl">kg/ha en plena prod.</span></div>
+            <div class="stat"><span class="stat-val">${miles(enUnidad(real, UNIDAD.factor))}</span><span class="stat-lbl">${UNIDAD.larga}</span></div>
+            <div class="stat"><span class="stat-val">${miles(enUnidad(meta, UNIDAD.factor))}</span><span class="stat-lbl">${UNIDAD.larga} en plena prod.</span></div>
             <div class="stat"><span class="stat-val${real && meta && real < meta ? ' neg' : ''}">${
                 real && meta ? pct(real / meta) : '—'}</span><span class="stat-lbl">de la plena prod.</span></div>`;
         return;
@@ -1875,7 +1940,7 @@ function pintarMetricasBarra() {
         $('statsBar').innerHTML = `
             <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">${etiquetaHa}</span></div>
             <div class="stat"><span class="stat-val">${nf(a.kg / 1000, 0)}</span><span class="stat-lbl">Toneladas</span></div>
-            <div class="stat"><span class="stat-val">${miles(a.ha ? a.kg / a.ha : null)}</span><span class="stat-lbl">kg / ha</span></div>
+            <div class="stat"><span class="stat-val">${miles(a.ha ? enUnidad(a.kg / a.ha, UNIDAD.factor) : null)}</span><span class="stat-lbl">${UNIDAD.larga}</span></div>
             <div class="stat"><span class="stat-val">${regs.length}</span><span class="stat-lbl">${plural(regs.length, 'Variedad', 'Variedades')}</span></div>`;
         return;
     }
@@ -1992,7 +2057,9 @@ function tablaCosecha(regs) {
     const datos = regs.filter(v => v.cosecha).map(v => {
         const meta = v.rend_kg_ha[UTILES - 1];
         const fila = { variedad: v.variedad, especie: v.especie, ha: v.ha, reg: v, meta,
-                       agrupada: !!v.cosecha.agrupada };
+                       factor: v.kg_por_unidad || 1, agrupada: !!v.cosecha.agrupada };
+        // Se guarda en kilos -por eso el orden sigue siendo físico- y se muestra
+        // en la unidad de la variedad.
         v.cosecha.rend_kg_ha.forEach((x, i) => { fila['c' + i] = x; });
         fila.avance = meta && fila['c' + tc] != null ? fila['c' + tc] / meta : null;
         return fila;
@@ -2000,10 +2067,11 @@ function tablaCosecha(regs) {
     const filas = ordenarPor(datos, ordenTabla.campo, ordenTabla.campo === 'variedad').map(f => {
         const color = COLOR_VARIEDAD[VKEY_DE_MODELO[vkey(f.especie, f.variedad)]] || css('--dat-sindato');
         const celda = k => k === 'avance' ? (f.avance == null ? '—' : pct(f.avance))
-            : f[k] == null ? '—' : miles(f[k]);
+            : f[k] == null ? '—' : miles(enUnidad(f[k], f.factor));
+        const tag = f.factor > 1 ? `<span class="u-tag" title="Cajas de 8,2 kg">cj</span>` : '';
         return `<tr data-variedad="${esc(vkey(f.especie, f.variedad))}"${
-            f.agrupada ? ' title="La hoja mide esta variedad junto con otra: las dos llevan el rendimiento del conjunto"' : ''}>
-            <td><i class="lg-dot" style="background:${color}"></i>${esc(f.variedad)}${f.agrupada ? ' *' : ''}</td>
+            f.agrupada ? ' title="Fuente 2 la mide junto con otra variedad; el total se reparte con el detalle de la Ficha"' : ''}>
+            <td><i class="lg-dot" style="background:${color}"></i>${esc(f.variedad)}${f.agrupada ? ' *' : ''}${tag}</td>
             ${['c0', 'c1', 'c2'].map(k => `<td class="${k === 'c' + tc ? 'col-activa' : ''}">${celda(k)}</td>`).join('')}
             <td class="${f.avance != null && f.avance < 1 ? 'neg' : ''}">${celda('avance')}</td>
         </tr>`;
@@ -2081,7 +2149,7 @@ function tablaSuelos() {
 function tablaVariedades(regs) {
     const cols = modo === 'produccion'
         ? [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
-           { k: 'rend_kg_ha', t: 'kg/ha' }, { k: 'kg', t: 'Ton' }]
+           { k: 'rend_kg_ha', t: 'Rend./ha' }, { k: 'kg', t: 'Ton' }]
         : porKilo()
         ? [{ k: 'variedad', t: 'Variedad' }, { k: 'ha', t: 'ha' },
            { k: 'ingreso_kg', t: 'Ing/kg' }, { k: 'costo_kg', t: 'Costo/kg' },
@@ -2098,6 +2166,11 @@ function tablaVariedades(regs) {
         if (k === 'ha') return nf(v.ha, 1);
         if (k === 'margen') return pct(v.margen[t]);
         if (k === 'kg') return miles((v.kg[t] || 0) / 1000);
+        // El rendimiento, en la unidad de SU variedad. Se ordena por el
+        // equivalente en kilos para que el ranking siga siendo físico: si se
+        // ordenara por el número mostrado, 4.645 cajas quedarían sobre 13.825
+        // kilos sin que eso signifique nada.
+        if (k === 'rend_kg_ha') return miles(enUnidad(v.rend_kg_ha[t], v.kg_por_unidad || 1));
         // Dos decimales y sin el «US$ /kg» de la unidad: la columna ya lo dice
         // en el encabezado y repetirlo en 33 filas no agrega nada.
         if (POR_KILO.has(k)) return v[k][t] == null ? '—' : nf(v[k][t], 2);
@@ -2110,10 +2183,13 @@ function tablaVariedades(regs) {
     }).map(v => {
         const clave = vkey(v.especie, v.variedad);
         const color = COLOR_VARIEDAD[VKEY_DE_MODELO[clave]] || css('--dat-sindato');
+        const f = v.kg_por_unidad || 1;
+        const tag = modo === 'produccion' && f > 1
+            ? `<span class="u-tag" title="Cajas de 8,2 kg">cj</span>` : '';
         return `<tr data-variedad="${esc(clave)}">${cols.map((c, i) => {
             const neg = (c.k === 'ebitda_ha' || c.k === 'margen' || c.k === 'ebitda_kg') && valor(v, c.k) < 0;
             return i === 0
-                ? `<td><i class="lg-dot" style="background:${color}"></i>${celda(v, c.k)}</td>`
+                ? `<td><i class="lg-dot" style="background:${color}"></i>${celda(v, c.k)}${tag}</td>`
                 : `<td class="${neg ? 'neg' : ''}">${celda(v, c.k)}</td>`;
         }).join('')}</tr>`;
     }).join('');
@@ -2156,10 +2232,15 @@ function pintarConciliacion() {
             '<i>Cosecha real</i> muestra Fuente 2, que es la hoja cuyas hectáreas suman las 292,23 ha del modelo.</div>');
     }
     if (cos.agrupadas && cos.agrupadas.length) {
-        partes.push('<div class="mp-aviso"><b>Medidas juntas.</b> Fuente 2 lleva en una sola fila ' +
-            'Santina con Santina Macro Túnel, y Cara Cara con Fukumoto. Las dos de cada par reciben el ' +
-            'rendimiento del conjunto —que es lo que se midió— y los kilos se reparten por superficie para ' +
-            'que los totales no cuenten nada dos veces. Van marcadas con * en la tabla.</div>');
+        const porSup = cos.repartidas_por_superficie || [];
+        partes.push('<div class="mp-aviso"><b>Medidas juntas, separadas con la Ficha.</b> ' +
+            '<i>Fuente 2</i> lleva en una sola fila Santina con Santina Macro Túnel, y Cara Cara con ' +
+            'Fukumoto. La <i>Ficha Técnica</i> sí las separa, así que el total de cada temporada —que lo ' +
+            'sigue poniendo Fuente 2— se reparte con las proporciones de la Ficha. Por eso Cara Cara y ' +
+            'Fukumoto salen distintos en el mapa (21.092 y 37.604 kg/ha en 2025-2026) en vez de pintados ' +
+            'del mismo color. Van marcadas con * en la tabla.' +
+            (porSup.length ? ' Donde la Ficha no tiene con qué repartir, el reparto es por superficie: ' +
+                porSup.map(esc).join(', ') + '.' : '') + '</div>');
     }
     if (av.produccion_incoherente && av.produccion_incoherente.length) {
         partes.push('<div class="mp-aviso"><b>Revisar el libro.</b> En la hoja <i>Consolidado por variedad</i>, el bloque PRODUCCIÓN trae corridas una fila las cuatro variedades de Uva Vinífera, y la última carga el total de la especie. ' +
@@ -2432,12 +2513,14 @@ function dibujarGrafico(regs) {
         cv.parentElement.style.height = alto(filas.length * 0.73);
         grafico = barrasHorizontales(cv, filas.map(v => ({
             nombre: v.variedad,
-            valor: v.cosecha.rend_kg_ha[tc],
-            color: colorEscala(v.cosecha.rend_kg_ha[tc], ESCALAS.rend_kg_ha),
-            nota: nf(v.ha, 1) + ' ha'
-        })), v => miles(v), 'kg/ha cosechados');
+            valor: enUnidad(v.cosecha.rend_kg_ha[tc], UNIDAD.factor),
+            color: colorEscala(enUnidad(v.cosecha.rend_kg_ha[tc], UNIDAD.factor), UNIDAD.escala),
+            nota: nf(v.ha, 1) + ' ha' + (UNIDAD.mezcla && (v.kg_por_unidad || 1) > 1
+                ? '  ·  ' + miles(v.cosecha.rend_u_ha[tc]) + ' cajas/ha' : '')
+        })), v => miles(v), UNIDAD.larga + ' cosechados');
         $('chartNota').textContent = 'Rendimiento cosechado en ' + MOD.cosechas.temporadas[tc] +
-            '. Mismos cortes y colores que el mapa y que la producción proyectada, para poder compararlas.';
+            '. Mismos cortes y colores que el mapa y que la producción proyectada, para poder compararlas.' +
+            (UNIDAD.mezcla ? ' Va en kilos porque hay cajas y kilos encendidos a la vez; con sólo uva de mesa a la vista pasa a cajas.' : '');
         return;
     }
 
@@ -2500,7 +2583,9 @@ function dibujarGrafico(regs) {
     // el selector dice «Costos / kg», mirar un ranking de EBITDA/ha al lado del
     // mapa obliga a cambiar de pregunta entre una mitad de la pantalla y otra.
     const campo = produccion ? 'rend_kg_ha' : metrica;
-    const escala = ESCALAS[campo];
+    const escala = produccion ? UNIDAD.escala : ESCALAS[campo];
+    // En Producción el valor vive en kilos y se dice en la unidad en vigor.
+    const aUnidad = x => produccion ? enUnidad(x, UNIDAD.factor) : x;
     // Las variedades sin dato quedan fuera en vez de dibujarse como cero: una
     // barra de largo cero en una temporada sin cosecha se lee como «no gana
     // nada» y lo que pasa es que todavía no hay con qué calcularlo.
@@ -2512,8 +2597,8 @@ function dibujarGrafico(regs) {
         data: {
             labels: filas.map(v => v.variedad),
             datasets: [{
-                data: filas.map(v => v[campo][t]),
-                backgroundColor: filas.map(v => colorEscala(v[campo][t], escala)),
+                data: filas.map(v => aUnidad(v[campo][t])),
+                backgroundColor: filas.map(v => colorEscala(aUnidad(v[campo][t]), escala)),
                 borderRadius: 3, borderSkipped: false,
                 categoryPercentage: 0.84, barPercentage: 0.88
             }]
@@ -2534,10 +2619,14 @@ function dibujarGrafico(regs) {
             },
             scales: {
                 x: (() => {
-                    const r = rangoY(filas.map(v => v[campo][t]));
+                    const r = rangoY(filas.map(v => aUnidad(v[campo][t])));
                     return { ...base, min: r.min, max: r.max,
                              ticks: { ...tick, stepSize: r.paso, maxRotation: 0, minRotation: 0,
-                                      callback: EJE[campo] || (v => nf(v, 0)) } };
+                                                                // En cajas los valores van de 265 a 5.700:
+                                      // dividirlos por mil deja el eje en "0k".
+                                      callback: produccion
+                                          ? (UNIDAD.factor > 1 ? (v => nf(v, 0)) : (v => nf(v / 1000, 0) + 'k'))
+                                          : (EJE[campo] || (v => nf(v, 0))) } };
                 })(),
                 y: { ...base, grid: { display: false }, ticks: { ...tick, autoSkip: false, font: { family: 'Fira Sans', size: 10 } } }
             }
@@ -2559,7 +2648,7 @@ function construirSelectores() {
             `<option value="${i}"${i === tc ? ' selected' : ''}>${esc(s)}${
                 MOD.cosechas.kg[i] ? '' : ' · sin registro'}</option>`).join('')
         : MOD.temporadas.slice(0, UTILES).map((s, i) =>
-            `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === UTILES - 1 ? ' · plena producción' : ''}</option>`).join('');
+            `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === UTILES - 1 ? ' · plena' : ''}</option>`).join('');
     $('selMetrica').innerHTML = METRICAS_FIN.map(g =>
         `<optgroup label="${esc(g.grupo)}">` + g.campos.map(m =>
             `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`
@@ -2615,6 +2704,10 @@ function sincronizarControles() {
 
 function cambiarModo(nuevo) {
     modo = nuevo;
+    // Los selectores también: al volver a Producción con la cara de cosecha
+    // activa, el de temporada seguía ofreciendo las del modelo mientras el mapa
+    // pintaba una temporada cosechada, y los dos decían cosas distintas.
+    construirSelectores();
     sincronizarControles();
     repintar();
 }

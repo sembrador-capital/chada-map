@@ -404,15 +404,26 @@ def leer_base(ws):
     exigir(i_cab, "la cabecera Especie / Variedad", "Base Chada")
 
     out = {}
+    # Indice de respaldo por nombre de variedad. La hoja escribe "Naranjas"
+    # donde el modelo dice "Naranjos", y con la clave especie|variedad esas dos
+    # filas no calzaban con nada: Cara Cara y Fukumoto quedaban sin historia sin
+    # que nadie se enterara, porque una variedad sin historico igual se dibuja.
+    # El nombre de variedad alcanza para desempatar mientras sea unico, y si
+    # algun dia deja de serlo el respaldo se desactiva solo para ese nombre.
+    por_variedad = {}
     for row in filas[i_cab + 1:]:
         especie, variedad, desde, hasta, ha, plantas, p23, p24, p25 = row[:9]
         if not especie or not variedad:
             break
-        out[norm(clave_modelo(especie, variedad))] = {
+        dato = {
             "anio_desde": desde, "anio_hasta": hasta,
             "ha_ficha": num(ha, 3), "plantas": num(plantas, 0),
             "prod_23_24": num(p23, 0), "prod_24_25": num(p24, 0), "prod_25_26": num(p25, 0),
         }
+        out[norm(clave_modelo(especie, variedad))] = dato
+        v = norm(variedad)
+        por_variedad[v] = None if v in por_variedad else dato
+    out["__por_variedad__"] = {k: v for k, v in por_variedad.items() if v}
     return out
 
 
@@ -516,7 +527,8 @@ def cruzar_cosechas(fuente2, variedades):
       - que la superficie de la fila agrupada sea la suma de sus partes.
     """
     avisos = {"sin_cosecha": [], "desalineadas": [], "unidad_distinta": [],
-              "difieren_de_ficha": [], "agrupadas": [], "rend_es_total": []}
+              "difieren_de_ficha": [], "agrupadas": [], "rend_es_total": [],
+              "repartidas_por_superficie": []}
 
     # Como se escribe de verdad cada variedad. Las claves de FUENTE2_AGRUPA van
     # sin tildes porque este archivo se lee en consolas que no siempre pueden
@@ -535,6 +547,8 @@ def cruzar_cosechas(fuente2, variedades):
         else:
             de_variedad[clave_f2] = (dato, None)
 
+    variedades_por_nombre = {norm(r["variedad"]): r for r in variedades.values()}
+
     n = len(TEMPORADAS_COSECHA)
     for reg in variedades.values():
         par = de_variedad.get(norm(reg["variedad"]))
@@ -550,20 +564,58 @@ def cruzar_cosechas(fuente2, variedades):
                 % (reg["variedad"], "en cajas" if dato["en_cajas"] else "en kilos",
                    "en cajas" if factor > 1 else "en kilos"))
 
-        # El rendimiento es siempre el de la fila: en una agrupada, la hoja midio
-        # los dos panos juntos y no hay como separarlos, asi que los dos reciben
-        # el rendimiento del conjunto -que es lo que de verdad se midio- y queda
-        # marcado en "agrupada".
         ha_fila = dato["ha"] or reg["ha"]
         kg_fila = [None if v is None else v * factor for v in dato["serie"]]
-        rend = [None if v is None or not ha_fila else round(v / ha_fila) for v in kg_fila]
-        # Los KILOS, en cambio, se reparten por superficie entre las partes. Sin
-        # esto las dos variedades de una fila agrupada llevan cada una el total
-        # del par, y cualquier suma -el total del predio, el de un cuartel
-        # mixto- lo cuenta dos veces. Repartir por hectarea es la unica division
-        # que conserva el total y deja a las dos con el rendimiento medido.
-        cuota = 1.0 if not agrupada or not ha_fila else (reg["ha"] / ha_fila)
-        kg = [None if v is None else round(v * cuota) for v in kg_fila]
+
+        # Una fila agrupada hay que repartirla entre sus partes: si las dos se
+        # quedan con el total del par, cualquier suma lo cuenta dos veces.
+        #
+        # El reparto sale de la Ficha, que SI las lleva separadas -Cara Cara y
+        # Fukumoto son 1,41 y 1,12 ha con cosechas muy distintas, y darles el
+        # mismo rendimiento borraba justamente la diferencia entre los dos
+        # cuarteles-. Fuente 2 sigue mandando en el total de cada temporada; la
+        # Ficha solo dice como se parte. Cuando la Ficha no tiene con que
+        # repartir esa temporada, se reparte por superficie y queda avisado.
+        cuota, criterio = [1.0] * n, None
+        if agrupada:
+            partes = FUENTE2_AGRUPA[agrupada]
+            hist = {norm(x): (variedades_por_nombre.get(norm(x)) or {}).get("historico") or {}
+                    for x in partes}
+            ha_parte = {norm(x): (variedades_por_nombre.get(norm(x)) or {}).get("ha") or 0.0
+                        for x in partes}
+            campos = ("prod_23_24", "prod_24_25", "prod_25_26")
+            mio = norm(reg["variedad"])
+            por_superficie = False
+            for i in range(n):
+                # El reparto se decide para el PAR, no para cada parte por su
+                # cuenta: si una mira la Ficha y la otra cae a superficie, las
+                # dos cuotas no suman uno y el total de la temporada se infla.
+                # Una parte sin dato en la Ficha cuenta como cero, no como
+                # faltante: el total del par ya esta explicado por las otras.
+                trozos = {norm(x): (hist[norm(x)].get(campos[i]) or 0.0) for x in partes}
+                total = sum(trozos.values())
+                if total:
+                    cuota[i] = trozos[mio] / total
+                    criterio = criterio or "ficha"
+                else:
+                    ha_partes = sum(ha_parte.values())
+                    cuota[i] = (ha_parte[mio] / ha_partes) if ha_partes else 0.0
+                    por_superficie = True
+            if por_superficie:
+                criterio = "mixto" if criterio else "superficie"
+                avisos["repartidas_por_superficie"].append(reg["variedad"])
+
+        kg = [None if v is None else round(v * cuota[i]) for i, v in enumerate(kg_fila)]
+        # Y el rendimiento es el de la variedad, con SUS hectareas: es lo que
+        # permite que dos cuarteles de la misma fila agrupada se pinten distinto
+        # cuando de verdad rindieron distinto.
+        ha_propia = reg["ha"] or ha_fila
+        rend = [None if v is None or not ha_propia else round(v / ha_propia) for v in kg]
+        # El mismo rendimiento en la unidad del modelo: la uva de mesa se
+        # negocia en cajas, no en kilos, y "22.834 kg/ha" no es un numero que
+        # nadie use para hablar de un parron.
+        rend_u = [None if v is None or not ha_propia else round(v / factor / ha_propia, 1)
+                  for v in kg]
 
         # La ultima temporada tiene que ser la produccion 25/26 que ya teniamos.
         h = reg.get("historico") or {}
@@ -585,10 +637,11 @@ def cruzar_cosechas(fuente2, variedades):
             avisos["difieren_de_ficha"].append(reg["variedad"])
 
         if agrupada:
-            avisos["agrupadas"].append("%s (con %s)" % (
+            avisos["agrupadas"].append("%s (con %s, reparto %s)" % (
                 reg["variedad"],
                 " + ".join(bonito(x) for x in FUENTE2_AGRUPA[agrupada]
-                           if norm(x) != norm(reg["variedad"]))))
+                           if norm(x) != norm(reg["variedad"])),
+                criterio or "superficie"))
 
         # ¿La celda rend_25_26 de 'Inputs Generales' trae un rendimiento o un
         # total? Con la cosecha real a mano se puede distinguir sin adivinar:
@@ -617,9 +670,11 @@ def cruzar_cosechas(fuente2, variedades):
         reg["cosecha"] = {
             "kg": kg,
             "rend_kg_ha": rend,
-            "ha": round(ha_fila, 3) if ha_fila else None,
+            "ha": round(ha_propia, 3) if ha_propia else None,
+            "rend_u_ha": rend_u,
             "agrupada": (" + ".join(bonito(x) for x in FUENTE2_AGRUPA[agrupada])
                          if agrupada else None),
+            "criterio_reparto": criterio,
             "difiere_de_ficha": difiere,
         }
     # Cada bloque de la hoja rotula sus temporadas a su manera -la cereza por el
@@ -720,7 +775,8 @@ def main():
                 reg.setdefault(campo, None)
         else:
             reg.update(extra)
-        reg["historico"] = base.get(norm(clave))
+        reg["historico"] = (base.get(norm(clave))
+                            or base["__por_variedad__"].get(norm(reg["variedad"])))
         v = norm(reg["variedad"])
         nombres, nota_tasacion = ALIAS_TASACION.get(v, ([v], None))
         reg["plantaciones"] = [b for n in nombres for b in plantaciones.get(n, [])]

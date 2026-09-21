@@ -185,10 +185,37 @@ Dos detalles de la fuente, ambos visibles en el mapa:
   rendimiento que no es el de ningún cuartel.
 - Fuente 2 lleva en una sola fila **Santina con Santina Macro Túnel** y **Cara
   Cara con Fukumoto** —sus hectáreas cuadran con la suma de las partes, que es
-  lo que permite afirmar que son la misma cosa con menos detalle—. Las dos de
-  cada par reciben el rendimiento del conjunto, que es lo que de verdad se midió,
-  y los kilos se reparten por superficie para que ninguna suma cuente dos veces.
-  Van marcadas con `*` en la tabla.
+  lo que permite afirmar que son la misma cosa con menos detalle—. La **Ficha
+  Técnica sí las separa**, así que el total de cada temporada, que lo sigue
+  poniendo Fuente 2, se reparte con las proporciones de la Ficha. Por eso Cara
+  Cara y Fukumoto salen distintos en el mapa —21.092 y 37.604 kg/ha en
+  2025-2026— en vez de pintados del mismo color por ser vecinos en una planilla.
+  El reparto se decide para el par completo y no para cada parte por su lado: si
+  una mirara la Ficha y la otra cayera a superficie, las cuotas no sumarían uno
+  y el total de la temporada se inflaría. Van marcadas con `*` en la tabla.
+
+### Cajas o kilos, según lo que se esté mirando
+
+El modelo lleva la uva de mesa en **cajas de 8,2 kg** —que es como se embala, se
+vende y se habla de un parrón— y todo lo demás en kilos. «22.834 kg/ha» no es un
+número que nadie use para describir un cuartel de Sweet Globe.
+
+La regla es la misma en toda la pestaña: **mientras lo que está a la vista
+comparta unidad se habla en la suya, y si hay mezcla se cae a kilos**, porque
+cajas y kilos no se suman ni caben en una misma escala de color. Con todo el
+predio encendido el mapa va en kg/ha; apagando el resto —o con un «solo» sobre
+Uva de mesa— la escala, la barra de métricas y el ranking pasan enteros a
+cajas/ha, con sus propios cortes redondos (1.000 · 2.000 · 3.000 · 4.000) y no
+los de kilos divididos por 8,2, que no caerían en ninguna parte reconocible.
+
+La **ficha de un cuartel siempre habla en la unidad del modelo**, haya o no
+mezcla en el resto de la pantalla: ningún paño comparte cajas con kilos —la uva
+de mesa no convive con otra especie en el mismo cuartel—, así que su unidad
+nunca es ambigua. En las tablas la unidad va en la fila y no en cada celda: una
+etiqueta `cj` junto al nombre de la variedad, porque repetirla en tres columnas
+por treinta y tres filas es ruido. Las columnas se **ordenan por el equivalente
+en kilos** para que el ranking siga siendo físico: ordenadas por el número
+mostrado, 4.645 cajas quedarían sobre 13.825 kilos sin que eso signifique nada.
 
 **Financiero** — dos familias de métricas, y el modo entero sigue a la que se
 elija: la barra de métricas, la tabla del panel y el ranking por variedad hablan
@@ -309,6 +336,18 @@ eje hasta −2 M y dejaba en blanco un quinto del gráfico. Y el paso calculado 
 el que manda: `maxTicksLimit` lo pisa y deja que Chart.js invente el suyo, que
 en el ranking por kilo salía con cortes como −0,80 y −0,35.
 
+### La barra de controles cabía en una fila y se partía igual
+
+La barra flotante de controles se partía en dos filas —con «Vista» sola abajo—
+por ancha que fuera la ventana. La causa no era el contenido: es un elemento
+absoluto con `left:50%` y sin `right`, y en ese caso el ancho disponible que el
+navegador usa para el «shrink-to-fit» es lo que va del 50% al borde derecho, o
+sea **media ventana**. Con 1.098 px de pantalla la barra se topaba en 549 px
+aunque su contenido midiera 780. Se arregla con `width:max-content` y un
+`max-width` que recién frena cuando de verdad no cabe. De paso se acortaron los
+rótulos que sobraban —«Proyectada (modelo)» cuando arriba ya dice VER— y el
+`<select>` de temporada, cuyo ancho lo manda su opción más larga.
+
 ### El chrome se acomoda midiendo, no adivinando
 
 Dos barras flotan sobre el mapa y las dos se encimaban con algo cuando el ancho
@@ -349,6 +388,13 @@ Se detecta sin adivinar, comparando contra la cosecha real: si la celda calza co
 los **kilos totales** de la temporada y no con los kilos por hectárea, lleva un
 total. El mapa no la corrige —muestra el libro tal cual— y deja la cosecha real
 al lado, en *Producción ▸ Cosecha real*.
+
+**0c. `Base Chada` escribe «Naranjas» donde el modelo dice «Naranjos».** El
+historico se buscaba por la clave `especie|variedad`, así que esas dos filas no
+calzaban con nada y **Cara Cara y Fukumoto quedaban sin historia** sin que se
+notara, porque una variedad sin histórico igual se dibuja. Ahora, cuando la
+clave completa falla, se busca por nombre de variedad mientras sea único. Eso
+además es lo que permite separar los dos naranjos en la cosecha real.
 
 **0b. Las dos fuentes de historia no dicen lo mismo.** `Fuente 2 Rendimientos` y
 la Ficha Técnica —que es la que alimenta `Base Chada` y, por ahí, el modelo—
