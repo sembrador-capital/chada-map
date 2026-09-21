@@ -49,11 +49,13 @@ LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 # El mapa lee esta misma lista desde los JSON generados, asi que no hay que
 # tocar index.html.
 ESCENARIOS = [
-    {"id": "optimista", "nombre": "Optimista",
+    {"id": "1", "nombre": "1",
      "libro": "Financial_Model_Hacienda_Chada_v1.xlsx",
      "salida": "modelo_data.json",
-     "nota": "Version base del modelo financiero."},
-    {"id": "pesimista", "nombre": "Pesimista",
+     # La nota es texto de pantalla, no comentario: va con tildes como todo lo
+     # que termina a la vista del usuario.
+     "nota": "Versión base del modelo financiero."},
+    {"id": "2", "nombre": "2",
      "libro": "Financial_Model_Hacienda_Chada_vPesimista.xlsx",
      "salida": "modelo_data_pesimista.json",
      "nota": "Menores producciones y menores costos."},
@@ -786,7 +788,8 @@ def procesar(esc, escribir_geo):
             "tools/modelo_to_json.py." % (esc["id"], libro))
     print("")
     print("=" * 70)
-    print("ESCENARIO %s  <-  %s" % (esc["nombre"].upper(), esc["libro"]))
+    print("ESCENARIO %s  <-  %s" % (esc["nombre"], esc["libro"]))
+    print("  %s" % esc["nota"])
     print("=" * 70)
     wb = abrir_libro(libro)
 
@@ -1126,6 +1129,7 @@ def main():
     i = min(3, len(base["temporadas"]) - 1)
     print("  %-14s %14s %14s %14s %14s" % ("escenario", "produccion kg", "ingresos", "costos", "EBITDA"))
     for esc_id, sal in salidas:
+        esc_id = "escenario " + esc_id
         t = sal["totales"]
         print("  %-14s %14s %14s %14s %14s"
               % (esc_id, format(t["kg"][i], ",d"), format(t["ingresos"][i], ",d"),
@@ -1134,7 +1138,7 @@ def main():
     for esc_id, sal in salidas[1:]:
         t = sal["totales"]
         print("  %-14s %13s%% %13s%% %13s%% %13s%%"
-              % ("vs " + base_id,
+              % ("vs escen. " + base_id,
                  *["%+.1f" % ((t[c][i] / t0[c][i] - 1) * 100) if t0[c][i] else "s/d"
                    for c in ("kg", "ingresos", "costos", "ebitda")]))
 

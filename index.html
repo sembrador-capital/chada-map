@@ -1080,6 +1080,12 @@ const verFisico  = () => modo === 'suelos' && subSuelo === 'fisico';
 const verCosecha = () => modo === 'produccion' && subProd === 'cosecha';
 const temporadaActual = () => verCosecha() ? MOD.cosechas.temporadas[tc] : MOD.temporadas[t];
 const nombreEscenario = () => ((MOD.escenario || {}).nombre) || '';
+/* El mismo nombre, pero para cuando viaja fuera de la barra de controles y no
+   tiene el rótulo «Escenario» encima que lo explique. */
+const etiquetaEscenario = () => {
+    const n = nombreEscenario();
+    return n ? (/^\s*\d+\s*$/.test(n) ? 'Escenario ' + n : n) : '';
+};
 /* El otro escenario, para comparar contra él. Con más de dos, el primero que no
    sea el activo. */
 const otroEscenario = () => ESCENARIOS.find(e => e.id !== escenario) || null;
@@ -1851,7 +1857,7 @@ function pintarEscala() {
             ? ' · DEM ' + esc(GEO.terreno.fuente)
             : e.tipo === 'suelo' ? ' · plano de la hacienda'
             : ' · ' + esc(temporadaActual()) + (verCosecha() ? ' · cosechado'
-                : conEscenario() ? ' · ' + esc(nombreEscenario()) : '')}</div>
+                : conEscenario() ? ' · ' + esc(etiquetaEscenario()) : '')}</div>
         <div class="escala-barra">${e.tokens.map(tk => `<i style="background:${css(tk)}"></i>`).join('')}</div>
         <div class="escala-ticks">${ticks.map(x => `<span>${esc(x)}</span>`).join('')}</div>
         <div class="escala-nd"><i style="background:${css('--dat-sindato')}"></i>Sin contraparte en el modelo</div>`;
@@ -2111,7 +2117,7 @@ function pintarPanel() {
     // definen de qué números habla el panel, y sin él dos capturas de pantalla
     // del mismo predio serían indistinguibles.
     $('mpSub').textContent = (modo === 'produccion' || modo === 'financiero')
-        ? temporadaActual() + (conEscenario() ? ' · ' + nombreEscenario() : '')
+        ? temporadaActual() + (conEscenario() ? ' · ' + etiquetaEscenario() : '')
         : GEO.farm.name;
     // Las dos vistas de gráfico son de Producción y Financiero; en los demás
     // modos hay una sola cosa que mostrar.
@@ -2328,7 +2334,10 @@ function pintarEscenarios() {
         }).join('')}</tbody>`;
 
     const filtrado = claves.length < MOD.variedades.length;
-    $('escNota').textContent = 'Los dos escenarios sobre ' +
+    // Con nombres de una cifra, la nota de cada escenario es lo unico que dice
+    // cual es cual, asi que encabeza el pie de la tabla.
+    $('escNota').textContent = ESCENARIOS.map(e => e.nombre + ': ' + (e.nota || '').replace(/\.\s*$/, '')).join(' · ') +
+        '. Los dos sobre ' +
         (filtrado ? 'las ' + claves.length + ' variedades encendidas' : 'el predio completo') +
         ', en ' + MOD.temporadas[t] + '. Cada escenario es un libro propio, con sus supuestos: ' +
         'no es un descuento aplicado sobre el otro.';
@@ -2794,7 +2803,7 @@ function dibujarGrafico(regs) {
    agregar un tercer escenario es una entrada más en ESCENARIOS del extractor. */
 function construirEscenarios() {
     $('segEscenario').innerHTML = ESCENARIOS.map(e =>
-        `<button type="button" data-esc="${esc(e.id)}" title="${esc(e.nota || '')}">${esc(e.nombre)}</button>`).join('');
+        `<button type="button" data-esc="${esc(e.id)}" title="Escenario ${esc(e.nombre)} · ${esc(e.nota || '')}">${esc(e.nombre)}</button>`).join('');
     $('segEscenario').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
         if (b.dataset.esc === escenario) return;
         usarEscenario(b.dataset.esc);

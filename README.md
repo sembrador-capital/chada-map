@@ -196,15 +196,18 @@ Dos detalles de la fuente, ambos visibles en el mapa:
 
 ### Dos escenarios del modelo
 
-Producción y Financiero se pueden mirar en **Optimista** —la versión base— o en
-**Pesimista**, con menores producciones y menores costos. No es un descuento
+Producción y Financiero se pueden mirar en el escenario **1** —la versión
+base— o en el **2**, con menores producciones y menores costos. Los botones van
+numerados y la descripción de cada uno vive en su `nota`: aparece al pasar el
+cursor por el botón y encabeza el pie de la tabla comparativa, que es lo que
+hace falta cuando el rótulo es una cifra. No es un descuento
 porcentual aplicado sobre el otro: cada escenario es un libro completo, con su
 propia hoja *Consolidado*, sus propios supuestos y sus propias proyecciones, y
 los dos pasan por el mismo lector y los mismos chequeos.
 
 En plena producción (2028-2029), sobre el predio completo:
 
-| | Optimista | Pesimista | Δ |
+| | Escenario 1 | Escenario 2 | Δ |
 |---|---|---|---|
 | Producción | 5.585 t | 5.421 t | −2,9% |
 | Ingresos | US$ 6.769.429 | US$ 6.486.034 | −4,2% |
@@ -222,7 +225,7 @@ es la forma lenta de leer eso.
 Tres decisiones que vale la pena dejar dichas:
 
 - **El escenario no aparece en *Cosecha real*.** Lo que el campo dio no tiene
-  versión optimista ni pesimista; ofrecer el control ahí insinuaría que el
+  escenario 1 ni 2; ofrecer el control ahí insinuaría que el
   pasado también se modela.
 - **Al cambiar de escenario no se rehacen la paleta, la leyenda ni el árbol de
   especies.** Salen de las superficies, que son idénticas entre escenarios, y
@@ -235,7 +238,12 @@ Tres decisiones que vale la pena dejar dichas:
 
 El escenario activo se escribe en la cabecera del panel y al pie de la escala,
 junto a la temporada: son los dos ejes que definen de qué números se está
-hablando, y sin eso dos capturas del mismo predio serían indistinguibles.
+hablando, y sin eso dos capturas del mismo predio serían indistinguibles. Ahí va
+como «Escenario 2» y no como «2» a secas: en la barra tiene encima el rótulo
+ESCENARIO que lo explica, pero al pie de una escala el número viaja solo.
+
+Cambiar los rótulos —a «Base» y «Ajustado», o a lo que sea— es editar el campo
+`nombre` en esa lista y volver a correr el extractor; el mapa los lee de ahí.
 
 ### Cajas o kilos, según lo que se esté mirando
 
@@ -490,8 +498,8 @@ de los 174.
 ```
 index.html                      La aplicación completa: chrome, estilos y lógica.
 geo_data.json                   Geometría e identidad de cuartel. Derivado, no se edita.
-modelo_data.json                Escenario optimista: superficie, producción, ingresos, costos, EBITDA.
-modelo_data_pesimista.json      Escenario pesimista, misma estructura.
+modelo_data.json                Escenario 1: superficie, producción, ingresos, costos, EBITDA.
+modelo_data_pesimista.json      Escenario 2, misma estructura.
 Hacienda Chada Huelquen.kmz     Fuente geográfica.
 tools/kml_to_geojson.py         KMZ → geo_data.json.
 tools/modelo_to_json.py         Modelos financieros → un JSON por escenario (y cruce al KMZ).
@@ -520,10 +528,10 @@ archivo y los rótulos viven en la lista `ESCENARIOS`, al principio de
 
 ```python
 ESCENARIOS = [
-    {"id": "optimista", "libro": "Financial_Model_Hacienda_Chada_v1.xlsx",
-     "salida": "modelo_data.json", ...},
-    {"id": "pesimista", "libro": "Financial_Model_Hacienda_Chada_vPesimista.xlsx",
-     "salida": "modelo_data_pesimista.json", ...},
+    {"id": "1", "nombre": "1", "libro": "Financial_Model_Hacienda_Chada_v1.xlsx",
+     "salida": "modelo_data.json", "nota": "Versión base del modelo financiero."},
+    {"id": "2", "nombre": "2", "libro": "Financial_Model_Hacienda_Chada_vPesimista.xlsx",
+     "salida": "modelo_data_pesimista.json", "nota": "Menores producciones y menores costos."},
 ]
 ```
 
