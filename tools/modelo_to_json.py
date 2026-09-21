@@ -33,6 +33,32 @@ import openpyxl
 RAIZ = Path(__file__).resolve().parent.parent
 LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 
+# ── Escenarios ────────────────────────────────────────────────────────────
+# Cada escenario es un libro completo, no un ajuste sobre otro: el modelo
+# pesimista trae su propia hoja Consolidado, sus propios supuestos y sus propias
+# proyecciones. Se leen los dos con el mismo lector -asi los dos pasan por los
+# mismos chequeos- y cada uno deja su JSON.
+#
+# El primero manda. Es el que escribe el cruce de variedades en geo_data.json y
+# contra el que se comparan los demas: el mapa dibuja una sola geometria y una
+# sola leyenda, asi que si un escenario cambiara la lista de variedades o sus
+# hectareas, el mapa estaria pintando un arbol que no corresponde. Eso se
+# verifica y detiene el script.
+#
+# Para agregar un escenario: una entrada mas aca y el libro en datos_fuente/.
+# El mapa lee esta misma lista desde los JSON generados, asi que no hay que
+# tocar index.html.
+ESCENARIOS = [
+    {"id": "optimista", "nombre": "Optimista",
+     "libro": "Financial_Model_Hacienda_Chada_v1.xlsx",
+     "salida": "modelo_data.json",
+     "nota": "Version base del modelo financiero."},
+    {"id": "pesimista", "nombre": "Pesimista",
+     "libro": "Financial_Model_Hacienda_Chada_vPesimista.xlsx",
+     "salida": "modelo_data_pesimista.json",
+     "nota": "Menores producciones y menores costos."},
+]
+
 # La consola de Windows sale en cp1252 y revienta con cualquier caracter fuera
 # de esa tabla. El JSON ya estaba escrito cuando eso pasaba, asi que el script
 # moria justo mientras contaba que habia terminado bien: el peor momento para
@@ -749,8 +775,19 @@ def reportar_cambios(anterior, salida):
                       % (etiqueta, format(round(a[i]), ",d"), format(round(b[i]), ",d")))
 
 
-def main():
-    libro = Path(sys.argv[1]) if len(sys.argv) > 1 else LIBRO
+def procesar(esc, escribir_geo):
+    """Lee un libro completo y deja su JSON. Devuelve la salida para cotejarla."""
+    libro = RAIZ / "datos_fuente" / esc["libro"]
+    if not libro.exists():
+        raise SystemExit(
+            "No esta el libro del escenario '%s':\n  %s\n\n"
+            "Los libros van en datos_fuente/ (que no se versiona). Si el archivo\n"
+            "cambio de nombre, hay que actualizar ESCENARIOS en\n"
+            "tools/modelo_to_json.py." % (esc["id"], libro))
+    print("")
+    print("=" * 70)
+    print("ESCENARIO %s  <-  %s" % (esc["nombre"].upper(), esc["libro"]))
+    print("=" * 70)
     wb = abrir_libro(libro)
 
     temporadas, variedades = leer_consolidado(wb["Consolidado por variedad"])
@@ -871,8 +908,11 @@ def main():
         reg["cuarteles"] = cuarteles_por_clave.get(clave, [])
         reg["cruce_aproximado"] = bool(aprox_por_clave.get(clave))
 
-    (RAIZ / "geo_data.json").write_text(
-        json.dumps(geo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    # El cruce variedad-cuartel lo escribe solo el escenario que manda: es
+    # geometria, no plata, y es identico en todos -se verifica despues-.
+    if escribir_geo:
+        (RAIZ / "geo_data.json").write_text(
+            json.dumps(geo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     # ── Agregados ─────────────────────────────────────────────────────────
     idx = lambda n: [sum(v[i] or 0 for v in (r[n] for r in variedades.values()))
@@ -960,6 +1000,10 @@ def main():
     salida = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": libro.name,
+        "escenario": {"id": esc["id"], "nombre": esc["nombre"], "nota": esc["nota"],
+                      "archivo": esc["salida"]},
+        "escenarios": [{"id": e["id"], "nombre": e["nombre"], "nota": e["nota"],
+                        "archivo": e["salida"]} for e in ESCENARIOS],
         "moneda": "US$",
         "temporadas": temporadas,
         "supuestos": supuestos,
@@ -980,7 +1024,7 @@ def main():
         },
     }
 
-    destino = RAIZ / "modelo_data.json"
+    destino = RAIZ / esc["salida"]
     anterior = None
     if destino.exists():
         try:
@@ -1023,6 +1067,76 @@ def main():
         for k in faltantes:
             print("    - %s" % k)
     reportar_cambios(anterior, salida)
+    return salida
+
+
+def cotejar_escenarios(salidas):
+    """Los escenarios tienen que describir el mismo campo.
+
+    El mapa dibuja una sola geometria, una sola leyenda y un solo arbol de
+    especies, y los comparte entre escenarios. Si uno agregara una variedad,
+    la sacara o le cambiara la superficie, al cambiar de escenario el mapa
+    seguiria pintando el arbol del primero y los totales dejarian de cuadrar sin
+    que nada lo dijera. Se compara y se detiene.
+    """
+    base_id, base = salidas[0]
+    ref = {(v["especie"], v["variedad"]): v["ha"] for v in base["variedades"]}
+    problemas = []
+    for otro_id, otro in salidas[1:]:
+        aca = {(v["especie"], v["variedad"]): v["ha"] for v in otro["variedades"]}
+        for k in sorted(set(ref) - set(aca)):
+            problemas.append("%s: falta %s / %s" % (otro_id, k[0], k[1]))
+        for k in sorted(set(aca) - set(ref)):
+            problemas.append("%s: sobra %s / %s" % (otro_id, k[0], k[1]))
+        for k in sorted(set(ref) & set(aca)):
+            if abs((ref[k] or 0) - (aca[k] or 0)) > 0.005:
+                problemas.append("%s: %s / %s tiene %.2f ha y en %s tiene %.2f"
+                                 % (otro_id, k[0], k[1], aca[k], base_id, ref[k]))
+        if len(otro["temporadas"]) != len(base["temporadas"]):
+            problemas.append("%s: %d temporadas y %s tiene %d"
+                             % (otro_id, len(otro["temporadas"]), base_id, len(base["temporadas"])))
+    if problemas:
+        raise SystemExit(
+            "Los escenarios no describen el mismo campo, y el mapa los dibuja\n"
+            "sobre una sola geometria y una sola leyenda.\n\n  "
+            + "\n  ".join(problemas[:20])
+            + "\n\nHay que cuadrar los libros antes de publicar.")
+
+
+def main():
+    # Un libro suelto por linea de comandos sigue funcionando: se procesa como
+    # el escenario que manda, que es lo que hacia este script antes.
+    if len(sys.argv) > 1:
+        esc = dict(ESCENARIOS[0])
+        esc["libro"] = Path(sys.argv[1]).name
+        procesar(esc, escribir_geo=True)
+        return
+
+    salidas = []
+    for i, esc in enumerate(ESCENARIOS):
+        salidas.append((esc["id"], procesar(esc, escribir_geo=(i == 0))))
+
+    cotejar_escenarios(salidas)
+
+    print("")
+    print("=" * 70)
+    print("COMPARACION ENTRE ESCENARIOS  (temporada de plena produccion)")
+    print("=" * 70)
+    base_id, base = salidas[0]
+    i = min(3, len(base["temporadas"]) - 1)
+    print("  %-14s %14s %14s %14s %14s" % ("escenario", "produccion kg", "ingresos", "costos", "EBITDA"))
+    for esc_id, sal in salidas:
+        t = sal["totales"]
+        print("  %-14s %14s %14s %14s %14s"
+              % (esc_id, format(t["kg"][i], ",d"), format(t["ingresos"][i], ",d"),
+                 format(t["costos"][i], ",d"), format(t["ebitda"][i], ",d")))
+    t0 = base["totales"]
+    for esc_id, sal in salidas[1:]:
+        t = sal["totales"]
+        print("  %-14s %13s%% %13s%% %13s%% %13s%%"
+              % ("vs " + base_id,
+                 *["%+.1f" % ((t[c][i] / t0[c][i] - 1) * 100) if t0[c][i] else "s/d"
+                   for c in ("kg", "ingresos", "costos", "ebitda")]))
 
 
 if __name__ == "__main__":

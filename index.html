@@ -495,6 +495,22 @@ body.panel-abierto .modelo-panel { display:flex; }
     color:var(--sem-text-2); background:var(--sem-slate-wash); border:var(--sem-border-soft);
 }
 
+.mp-esc { width:100%; border-collapse:collapse; font-size:10.5px; font-variant-numeric:tabular-nums; }
+.mp-esc th {
+    text-align:right; padding:5px 4px; font-size:9px; font-weight:600;
+    letter-spacing:0.03em; text-transform:uppercase; color:var(--sem-text-2);
+    border-bottom:var(--sem-border-hair); white-space:nowrap;
+}
+.mp-esc th:first-child { text-align:left; }
+/* La columna del escenario que se está mirando, marcada: la tabla muestra los
+   dos y sin esto no se sabe cuál es el que está pintando el mapa. */
+.mp-esc th.activa, .mp-esc td.activa { color:var(--sem-navy); font-weight:600; background:var(--sem-navy-wash); }
+.mp-esc td { padding:4px; text-align:right; border-bottom:var(--sem-border-soft); color:var(--sem-ink); }
+.mp-esc td:first-child { text-align:left; color:var(--sem-text-2); }
+.mp-esc td.delta { font-weight:500; }
+.mp-esc td.delta.baja { color:var(--neg-3); }
+.mp-esc td.delta.sube { color:var(--pos-4); }
+
 .mp-conc { width:100%; border-collapse:collapse; font-size:10.5px; font-variant-numeric:tabular-nums; }
 .mp-conc td { padding:4px 2px; border-bottom:var(--sem-border-soft); vertical-align:top; }
 .mp-conc td:last-child { text-align:right; white-space:nowrap; font-weight:500; }
@@ -624,6 +640,10 @@ body.panel-abierto .data-stamp { right:408px; }
             <option value="variedad" selected>Variedad</option>
         </select>
     </div>
+    <div class="fc-group" id="grpEscenario" hidden>
+        <label class="fc-label">Escenario</label>
+        <div class="seg" id="segEscenario" role="group" aria-label="Qué escenario del modelo mirar"></div>
+    </div>
     <div class="fc-group" id="grpMetrica" hidden>
         <label class="fc-label" for="selMetrica">Métrica</label>
         <select class="fc-select" id="selMetrica"></select>
@@ -748,6 +768,10 @@ body.panel-abierto .data-stamp { right:408px; }
         <div class="mp-sect abierta" id="sectTabla">
             <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span><span id="tituloTabla">Tabla por variedad</span></button>
             <div class="mp-sect-body"><table class="mp-tabla" id="tabla"></table></div>
+        </div>
+        <div class="mp-sect abierta" id="sectEscenarios" hidden>
+            <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Comparar escenarios</button>
+            <div class="mp-sect-body"><table class="mp-esc" id="tablaEsc"></table><div class="mp-conc-nota" id="escNota"></div></div>
         </div>
         <div class="mp-sect" id="sectConc">
             <button type="button" class="mp-sect-head"><span class="lg-caret"><svg viewBox="0 0 18 18" width="11" height="11"><use href="#ic-caret"/></svg></span>Conciliación de superficie</button>
@@ -982,6 +1006,15 @@ const METRICAS_SUELO = { fisico: ['clase', 'suelo_prof'], terreno: ['pendiente',
 
 /* ── Estado ─────────────────────────────────────────────────────────────── */
 let GEO = null, MOD = null;
+/* Los escenarios del modelo, cada uno un libro completo: no son un ajuste
+   porcentual sobre el otro, sino dos proyecciones con sus propios supuestos.
+   Se cargan los dos al arrancar -pesan poco y así cambiar de uno a otro es
+   instantáneo, sin una espera en medio de una comparación-. Comparten
+   geometría, leyenda, superficies y cosecha real: lo único que cambia es lo
+   proyectado, que es justamente lo que se quiere comparar. */
+let ESC = {};                  // id -> modelo completo
+let ESCENARIOS = [];           // los que de verdad se pudieron cargar
+let escenario = null;          // el id que se está mirando
 let MIDX = {};                 // clave del modelo -> registro de variedad
 let VKEY_DE_MODELO = {};       // clave del modelo -> rama del KMZ que la contiene
 let MODELOS_DE_VKEY = {};      // rama del KMZ -> claves del modelo que cuelgan de ella
@@ -1046,6 +1079,10 @@ const verFisico  = () => modo === 'suelos' && subSuelo === 'fisico';
 /* Y dentro de Producción. */
 const verCosecha = () => modo === 'produccion' && subProd === 'cosecha';
 const temporadaActual = () => verCosecha() ? MOD.cosechas.temporadas[tc] : MOD.temporadas[t];
+const nombreEscenario = () => ((MOD.escenario || {}).nombre) || '';
+/* El otro escenario, para comparar contra él. Con más de dos, el primero que no
+   sea el activo. */
+const otroEscenario = () => ESCENARIOS.find(e => e.id !== escenario) || null;
 
 const escalaActiva = () => modo === 'produccion' ? UNIDAD.escala
     : modo === 'suelos' ? ESCALAS[metricaSuelo] : ESCALAS[metrica];
@@ -1089,16 +1126,51 @@ map.addControl(new mapboxgl.ScaleControl({ maxWidth: 90, unit: 'metric' }), 'bot
 const traer = nombre => fetch(nombre, { cache: 'no-cache' })
     .then(r => { if (!r.ok) throw new Error(nombre + ' ' + r.status); return r.json(); });
 
-Promise.all([traer('geo_data.json'), traer('modelo_data.json')]).then(([geo, mod]) => {
-    GEO = geo; MOD = mod;
-    MOD.variedades.forEach(v => { MIDX[vkey(v.especie, v.variedad)] = v; });
-    // Hasta plena producción y nada más: de ahí en adelante las diecisiete
-    // temporadas restantes repiten exactamente el mismo número, y ofrecerlas en
-    // un selector hace creer que hay algo que mirar.
+/* Cuántas temporadas dicen algo. De plena producción en adelante las diecisiete
+   restantes repiten exactamente el mismo número, y ofrecerlas en un selector
+   hace creer que hay algo que mirar. Se calcula por escenario: uno pesimista
+   podría llegar a su meseta en otra temporada. */
+function temporadasUtiles(mod) {
     const cambia = i => ['ingresos', 'costos', 'ebitda', 'produccion']
-        .some(c => Math.abs((MOD.totales[c][i] || 0) - (MOD.totales[c][i + 1] || 0)) > 0.5);
-    UTILES = 1;
-    for (let i = 0; i < MOD.temporadas.length - 1; i++) if (cambia(i)) UTILES = i + 2;
+        .some(c => Math.abs((mod.totales[c][i] || 0) - (mod.totales[c][i + 1] || 0)) > 0.5);
+    let n = 1;
+    for (let i = 0; i < mod.temporadas.length - 1; i++) if (cambia(i)) n = i + 2;
+    return n;
+}
+
+/* Poner un escenario en vigor. Sólo se rehace lo que de verdad depende de él:
+   el índice de variedades y el horizonte. La paleta, la leyenda y el árbol de
+   especies NO se tocan —salen de las superficies, que el extractor verifica
+   idénticas entre escenarios— y rehacerlos borraría el filtro que el usuario
+   tenga puesto en medio de una comparación. */
+function usarEscenario(id) {
+    if (!ESC[id]) return;
+    escenario = id;
+    MOD = ESC[id];
+    MIDX = {};
+    MOD.variedades.forEach(v => { MIDX[vkey(v.especie, v.variedad)] = v; });
+    UTILES = temporadasUtiles(MOD);
+    t = Math.min(t, UTILES - 1);
+    document.querySelectorAll('#segEscenario button').forEach(b =>
+        b.classList.toggle('activo', b.dataset.esc === id));
+}
+
+Promise.all([traer('geo_data.json'), traer('modelo_data.json')]).then(([geo, base]) => {
+    GEO = geo;
+    ESC[base.escenario ? base.escenario.id : 'base'] = base;
+    // Los demás escenarios se piden por lo que declara el primero. Si alguno no
+    // está publicado el mapa sigue andando con los que sí: un escenario que
+    // falta es una opción menos, no una pantalla en blanco.
+    const otros = (base.escenarios || []).filter(e => !ESC[e.id]);
+    const faltan = [];
+    return Promise.all(otros.map(e => traer(e.archivo)
+        .then(x => { ESC[e.id] = x; })
+        .catch(() => { faltan.push(e.nombre); })
+    )).then(() => ({ base, faltan }));
+}).then(({ base, faltan }) => {
+    ESCENARIOS = (base.escenarios || [base.escenario]).filter(e => e && ESC[e.id]);
+    construirEscenarios();
+    usarEscenario(base.escenario ? base.escenario.id : ESCENARIOS[0].id);
     (GEO.suelos ? GEO.suelos.simbologia : []).forEach(s => { SUELO[s.clase] = s; });
 
     t = UTILES - 1;
@@ -1118,6 +1190,7 @@ Promise.all([traer('geo_data.json'), traer('modelo_data.json')]).then(([geo, mod
     togglePanel(false);
     $('dataStamp').textContent = 'KMZ ' + (GEO.generated_at || '').slice(0, 10) +
         ' · Modelo ' + (MOD.generated_at || '').slice(0, 10);
+    if (faltan.length) avisar('No se pudo cargar el escenario ' + faltan.join(' ni ') + '.');
     if (map.isStyleLoaded()) inicializar(); else map.on('load', inicializar);
 }).catch(e => { $('loader').textContent = 'No se pudieron cargar los datos: ' + e.message; });
 
@@ -1777,7 +1850,8 @@ function pintarEscala() {
         <div class="escala-sub">${esc(e.unidad)}${e.tipo === 'terreno'
             ? ' · DEM ' + esc(GEO.terreno.fuente)
             : e.tipo === 'suelo' ? ' · plano de la hacienda'
-            : ' · ' + esc(temporadaActual()) + (verCosecha() ? ' · cosechado' : '')}</div>
+            : ' · ' + esc(temporadaActual()) + (verCosecha() ? ' · cosechado'
+                : conEscenario() ? ' · ' + esc(nombreEscenario()) : '')}</div>
         <div class="escala-barra">${e.tokens.map(tk => `<i style="background:${css(tk)}"></i>`).join('')}</div>
         <div class="escala-ticks">${ticks.map(x => `<span>${esc(x)}</span>`).join('')}</div>
         <div class="escala-nd"><i style="background:${css('--dat-sindato')}"></i>Sin contraparte en el modelo</div>`;
@@ -1832,11 +1906,24 @@ function repintar() {
 /* ── Métricas ───────────────────────────────────────────────────────────── */
 /* Se leen las ramas encendidas, no los polígonos dibujados: así las dos
    variedades que el modelo tiene y el KMZ no dibuja siguen sumando. */
-const clavesVisibles = () => {
+const idsVisibles = () => {
     const s = new Set();
     visibles.forEach(k => (MODELOS_DE_VKEY[k] || []).forEach(m => s.add(m)));
-    return [...s].map(k => MIDX[k]).filter(Boolean);
+    return [...s];
 };
+const clavesVisibles = () => idsVisibles().map(k => MIDX[k]).filter(Boolean);
+
+/* El mismo índice, pero de otro escenario: es lo que permite sumar la misma
+   selección de ramas en los dos y compararlas sin cambiar de escenario. */
+const IDX_ESC = {};
+function idxDe(id) {
+    if (!IDX_ESC[id] && ESC[id]) {
+        IDX_ESC[id] = {};
+        ESC[id].variedades.forEach(v => { IDX_ESC[id][vkey(v.especie, v.variedad)] = v; });
+    }
+    return IDX_ESC[id] || {};
+}
+const regsDe = (id, claves) => claves.map(k => idxDe(id)[k]).filter(Boolean);
 
 function agregado(regs, temporada) {
     const ha = regs.reduce((a, v) => a + v.ha, 0);
@@ -2020,8 +2107,12 @@ function pintarPanel() {
     $('mpTitulo').textContent = tituloPanel();
     // Sólo la temporada, y sólo donde la hay: las hectáreas encendidas ya están
     // en la barra de métricas.
+    // El nombre del escenario va pegado a la temporada: son los dos ejes que
+    // definen de qué números habla el panel, y sin él dos capturas de pantalla
+    // del mismo predio serían indistinguibles.
     $('mpSub').textContent = (modo === 'produccion' || modo === 'financiero')
-        ? temporadaActual() : GEO.farm.name;
+        ? temporadaActual() + (conEscenario() ? ' · ' + nombreEscenario() : '')
+        : GEO.farm.name;
     // Las dos vistas de gráfico son de Producción y Financiero; en los demás
     // modos hay una sola cosa que mostrar.
     $('mpChartTabs').hidden = !(modo === 'produccion' || modo === 'financiero');
@@ -2033,6 +2124,7 @@ function pintarPanel() {
         : verCosecha() ? 'Cosecha por variedad' : 'Tabla por variedad';
     dibujarGrafico(regs);
     pintarTabla(regs);
+    pintarEscenarios();
     pintarConciliacion();
 }
 
@@ -2196,6 +2288,64 @@ function tablaVariedades(regs) {
     filaTabla(cols, () => tablaVariedades(clavesVisibles()), filas);
     $('tabla').querySelectorAll('tbody tr').forEach(tr =>
         tr.addEventListener('click', () => volarAVariedad(tr.dataset.variedad)));
+}
+
+/* Los dos escenarios sobre la MISMA selección de ramas y la MISMA temporada.
+   Es la pregunta que justifica tener dos modelos: no «cuánto da el pesimista»
+   sino «cuánto menos da», y sobre lo que se está mirando, no sobre el predio
+   entero. Cambiar de escenario para anotar un número y volver a cambiar es la
+   forma lenta de leer esta tabla. */
+function pintarEscenarios() {
+    const caja = $('sectEscenarios');
+    if (!conEscenario()) { caja.hidden = true; return; }
+    caja.hidden = false;
+
+    const claves = idsVisibles();
+    const cols = ESCENARIOS.map(e => ({ ...e, a: agregado(regsDe(e.id, claves), t) }));
+    const act = cols.findIndex(c => c.id === escenario);
+    const ref = cols[0].a, otro = cols[cols.length - 1].a;
+
+    // La variación de una razón se dice en puntos, no en porcentaje: un margen
+    // que baja de 8,9% a 6,0% no bajó «un 33%», bajó 2,9 puntos.
+    const filas = [
+        { t: 'Producción', v: c => nf(c.kg / 1000, 0) + ' t', d: () => rel(otro.kg, ref.kg) },
+        { t: 'Ingresos', v: c => usd(c.ingresos), d: () => rel(otro.ingresos, ref.ingresos) },
+        { t: 'Costos', v: c => usd(c.costos), d: () => rel(otro.costos, ref.costos) },
+        { t: 'EBITDA', v: c => usd(c.ebitda), d: () => rel(otro.ebitda, ref.ebitda) },
+        { t: 'EBITDA / ha', v: c => usd(c.ebitda_ha), d: () => rel(otro.ebitda_ha, ref.ebitda_ha) },
+        { t: 'Margen s/ventas', v: c => pct(c.margen), d: () => puntos(otro.margen, ref.margen) },
+        { t: 'Margen / kg', v: c => usdkg(c.ebitda_kg), d: () => rel(otro.ebitda_kg, ref.ebitda_kg) }
+    ];
+    $('tablaEsc').innerHTML = `
+        <thead><tr><th></th>${cols.map((c, i) =>
+            `<th class="${i === act ? 'activa' : ''}" title="${esc(c.nota || '')}">${esc(c.nombre)}</th>`).join('')}
+            <th>Δ</th></tr></thead>
+        <tbody>${filas.map(f => {
+            const d = f.d();
+            return `<tr><td>${f.t}</td>${cols.map((c, i) =>
+                `<td class="${i === act ? 'activa' : ''}">${f.v(c.a)}</td>`).join('')}
+                <td class="delta ${d.signo}">${d.texto}</td></tr>`;
+        }).join('')}</tbody>`;
+
+    const filtrado = claves.length < MOD.variedades.length;
+    $('escNota').textContent = 'Los dos escenarios sobre ' +
+        (filtrado ? 'las ' + claves.length + ' variedades encendidas' : 'el predio completo') +
+        ', en ' + MOD.temporadas[t] + '. Cada escenario es un libro propio, con sus supuestos: ' +
+        'no es un descuento aplicado sobre el otro.';
+}
+
+/* Variación relativa, cuidando el caso que rompe el porcentaje: cuando la
+   referencia es cero o cambia de signo, «−340%» no significa nada. */
+function rel(x, base) {
+    if (x == null || base == null) return { texto: '—', signo: '' };
+    if (!base || (base < 0) !== (x < 0)) return { texto: usd(x - base), signo: x < base ? 'baja' : 'sube' };
+    const r = x / base - 1;
+    return { texto: (r > 0 ? '+' : '') + nf(r * 100, 1) + '%', signo: r < 0 ? 'baja' : r > 0 ? 'sube' : '' };
+}
+function puntos(x, base) {
+    if (x == null || base == null) return { texto: '—', signo: '' };
+    const d = (x - base) * 100;
+    return { texto: (d > 0 ? '+' : '') + nf(d, 1) + ' pp', signo: d < 0 ? 'baja' : d > 0 ? 'sube' : '' };
 }
 
 function pintarConciliacion() {
@@ -2640,6 +2790,33 @@ function dibujarGrafico(regs) {
 }
 
 /* ── Selectores y modos ─────────────────────────────────────────────────── */
+/* Los botones salen de lo que declara el JSON, no de una lista escrita acá:
+   agregar un tercer escenario es una entrada más en ESCENARIOS del extractor. */
+function construirEscenarios() {
+    $('segEscenario').innerHTML = ESCENARIOS.map(e =>
+        `<button type="button" data-esc="${esc(e.id)}" title="${esc(e.nota || '')}">${esc(e.nombre)}</button>`).join('');
+    $('segEscenario').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.esc === escenario) return;
+        usarEscenario(b.dataset.esc);
+        // El horizonte puede haber cambiado de largo, así que el selector de
+        // temporada se rehace; la ficha fijada muestra cifras del escenario
+        // anterior y se vuelve a dibujar con las nuevas.
+        construirSelectores();
+        actualizarSubLeyenda();
+        repintar();
+        if (fijado) {
+            const f = GEO.cuarteles.features.find(x => x.properties.uid === fijado);
+            if (f) mostrarFicha(f.properties, map.project(f.properties.centro), true);
+        }
+    }));
+}
+
+/* El escenario sólo manda donde hay proyección. La cosecha real es lo que el
+   campo dio: no tiene versión optimista ni pesimista, y ofrecer el control ahí
+   insinuaría que el pasado también se modela. */
+const conEscenario = () => ESCENARIOS.length > 1 &&
+    (modo === 'financiero' || (modo === 'produccion' && subProd === 'modelo'));
+
 function construirSelectores() {
     // Dos ejes de tiempo: el del modelo y el de las cosechas registradas. El
     // selector muestra el que corresponde al modo, con su propio índice.
@@ -2693,6 +2870,7 @@ function sincronizarControles() {
     document.body.classList.toggle('modo-dato', modo !== 'general');
     $('grpColor').hidden = modo !== 'general';
     $('grpSubProd').hidden = modo !== 'produccion';
+    $('grpEscenario').hidden = !conEscenario();
     $('grpMetrica').hidden = modo !== 'financiero';
     $('grpSubSuelo').hidden = modo !== 'suelos';
     $('grpSuelo').hidden = modo !== 'suelos';
@@ -2727,8 +2905,10 @@ $('selSuelo').addEventListener('change', e => { metricaSuelo = e.target.value; r
 $('segProd').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     subProd = b.dataset.sub;
     $('segProd').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
-    // El selector de temporada cambia de eje entero, así que se reconstruye.
+    // El selector de temporada cambia de eje entero, así que se reconstruye, y
+    // el de escenario aparece o desaparece según haya proyección o no.
     construirSelectores();
+    sincronizarControles();
     if (fijado) desfijar();
     repintar();
 }));

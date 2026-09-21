@@ -194,6 +194,49 @@ Dos detalles de la fuente, ambos visibles en el mapa:
   una mirara la Ficha y la otra cayera a superficie, las cuotas no sumarían uno
   y el total de la temporada se inflaría. Van marcadas con `*` en la tabla.
 
+### Dos escenarios del modelo
+
+Producción y Financiero se pueden mirar en **Optimista** —la versión base— o en
+**Pesimista**, con menores producciones y menores costos. No es un descuento
+porcentual aplicado sobre el otro: cada escenario es un libro completo, con su
+propia hoja *Consolidado*, sus propios supuestos y sus propias proyecciones, y
+los dos pasan por el mismo lector y los mismos chequeos.
+
+En plena producción (2028-2029), sobre el predio completo:
+
+| | Optimista | Pesimista | Δ |
+|---|---|---|---|
+| Producción | 5.585 t | 5.421 t | −2,9% |
+| Ingresos | US$ 6.769.429 | US$ 6.486.034 | −4,2% |
+| Costos | US$ 5.813.190 | US$ 5.747.986 | −1,1% |
+| EBITDA | US$ 605.560 | US$ 387.373 | **−36,0%** |
+| Margen s/ventas | 8,9% | 6,0% | −3,0 pp |
+
+El apalancamiento es el punto: 4,2% menos de ingresos contra 1,1% menos de
+costos se traduce en 36% menos de EBITDA. Esa tabla está en el panel —*Comparar
+escenarios*— y se calcula **sobre las ramas que estén encendidas y la temporada
+que esté elegida**, no sobre el predio entero: filtrando a Cerezos se ve cuánto
+de la caída es de ahí. Cambiar de escenario, anotar un número y volver a cambiar
+es la forma lenta de leer eso.
+
+Tres decisiones que vale la pena dejar dichas:
+
+- **El escenario no aparece en *Cosecha real*.** Lo que el campo dio no tiene
+  versión optimista ni pesimista; ofrecer el control ahí insinuaría que el
+  pasado también se modela.
+- **Al cambiar de escenario no se rehacen la paleta, la leyenda ni el árbol de
+  especies.** Salen de las superficies, que son idénticas entre escenarios, y
+  rehacerlos borraría el filtro puesto en medio de una comparación.
+- **El extractor verifica que los escenarios describan el mismo campo** —mismas
+  variedades, mismas hectáreas, mismo horizonte— y se detiene si no. El mapa
+  dibuja una sola geometría y una sola leyenda para todos: si un escenario
+  agregara una variedad, al cambiar seguiría pintando el árbol del otro y los
+  totales dejarían de cuadrar sin que nada lo dijera.
+
+El escenario activo se escribe en la cabecera del panel y al pie de la escala,
+junto a la temporada: son los dos ejes que definen de qué números se está
+hablando, y sin eso dos capturas del mismo predio serían indistinguibles.
+
 ### Cajas o kilos, según lo que se esté mirando
 
 El modelo lleva la uva de mesa en **cajas de 8,2 kg** —que es como se embala, se
@@ -447,13 +490,14 @@ de los 174.
 ```
 index.html                      La aplicación completa: chrome, estilos y lógica.
 geo_data.json                   Geometría e identidad de cuartel. Derivado, no se edita.
-modelo_data.json                Superficie, producción, ingresos, costos y EBITDA.
+modelo_data.json                Escenario optimista: superficie, producción, ingresos, costos, EBITDA.
+modelo_data_pesimista.json      Escenario pesimista, misma estructura.
 Hacienda Chada Huelquen.kmz     Fuente geográfica.
 tools/kml_to_geojson.py         KMZ → geo_data.json.
-tools/modelo_to_json.py         Modelo financiero → modelo_data.json (y cruce al KMZ).
+tools/modelo_to_json.py         Modelos financieros → un JSON por escenario (y cruce al KMZ).
 tools/terreno_to_json.py        DEM de Mapbox → pendiente, exposición y elevación por cuartel.
 tools/suelos_to_json.py         Plano de suelos (PDF) → tipo de suelo por cuartel.
-datos_fuente/                   El .xlsx del modelo y el PDF del plano. Ignorado por git.
+datos_fuente/                   Los .xlsx de los modelos y el PDF del plano. Ignorado por git.
 ```
 
 ### Cuando llegue un modelo financiero nuevo
@@ -465,12 +509,33 @@ procedimiento son dos pasos.
 # 1. dejar el libro nuevo en su lugar, con el mismo nombre
 cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v1.xlsx
 
-# 2. releer el modelo y volver a cruzarlo contra los cuarteles
+# 2. releer los modelos y volver a cruzarlos contra los cuarteles
 python tools/modelo_to_json.py
 ```
 
-**No hay que correr los otros tres.** `modelo_to_json.py` reescribe
-`modelo_data.json` y actualiza el cruce dentro de `geo_data.json` sin tocar la
+El script lee **todos los escenarios** en una corrida y termina con la tabla
+comparativa, así que no hay que acordarse de correrlo dos veces. Los nombres de
+archivo y los rótulos viven en la lista `ESCENARIOS`, al principio de
+`tools/modelo_to_json.py`:
+
+```python
+ESCENARIOS = [
+    {"id": "optimista", "libro": "Financial_Model_Hacienda_Chada_v1.xlsx",
+     "salida": "modelo_data.json", ...},
+    {"id": "pesimista", "libro": "Financial_Model_Hacienda_Chada_vPesimista.xlsx",
+     "salida": "modelo_data_pesimista.json", ...},
+]
+```
+
+**Para agregar un tercer escenario** basta una entrada más ahí y el libro en
+`datos_fuente/`: el mapa arma los botones leyendo esa lista desde el JSON, así
+que no hay que tocar `index.html`. El primero de la lista manda —es el que
+escribe el cruce en `geo_data.json` y contra el que se comparan los demás—, y si
+un JSON de escenario no está publicado el mapa sigue andando con los que sí, con
+un aviso: un escenario que falta es una opción menos, no una pantalla en blanco.
+
+**No hay que correr los otros tres.** `modelo_to_json.py` reescribe el JSON de
+cada escenario y actualiza el cruce dentro de `geo_data.json` sin tocar la
 geometría, el terreno ni el suelo. Los otros scripts sólo se corren si cambia
 el KMZ o el plano — y en ese caso el orden importa, porque
 `kml_to_geojson.py` reconstruye `geo_data.json` desde cero.
@@ -484,7 +549,9 @@ dar la actualización por buena:
   descuento) y si cambió el horizonte de temporadas;
 - cómo quedaron ingresos, costos y EBITDA en plena producción, antes y después;
 - las variedades del modelo que no tienen cuartel dibujado y los cuarteles que
-  quedaron sin contraparte — o sea, los nombres que dejaron de calzar.
+  quedaron sin contraparte — o sea, los nombres que dejaron de calzar;
+- y, al final, producción, ingresos, costos y EBITDA de **cada escenario** en
+  plena producción, con la variación de cada uno contra el primero.
 
 **Nada se lee por número de fila.** Cada bloque se busca por su título, la
 cantidad de variedades sale de contar entre la cabecera y el total, y las
@@ -503,6 +570,8 @@ apellido en vez de un traceback:
 | Se agregó al Consolidado pero no a la tabla de supuestos | Cuál variedad; la dibuja igual con los números que hay, sin precio ni rendimiento |
 | Se movieron columnas en la tabla de supuestos | Qué columna, qué decía y qué se esperaba |
 | El libro llegó sin valores calculados | Que hay que abrirlo en Excel y volver a guardarlo |
+| Falta el .xlsx de un escenario | Cuál, dónde lo buscó y dónde se configura el nombre |
+| Dos escenarios no describen el mismo campo | Qué variedad sobra, falta o cambió de hectáreas, y en cuál |
 
 Ese último caso vale la pena explicarlo: el script lee el resultado que Excel
 deja **cacheado** en el archivo, porque no evalúa fórmulas. Un `.xlsx` guardado
