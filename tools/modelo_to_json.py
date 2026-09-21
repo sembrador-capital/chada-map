@@ -3,6 +3,7 @@
 
 Lee cuatro hojas del libro y las consolida en una sola estructura por variedad:
 
+  Fuente 2 Rendimientos    : cosecha real por variedad, ultimas tres temporadas.
   Consolidado por variedad : superficie, produccion, ingresos, costos, EBITDA y
                              EBITDA/ha, cada uno por temporada.
   Inputs Generales         : supuestos macro, conciliacion de superficies y la
@@ -415,6 +416,230 @@ def leer_base(ws):
     return out
 
 
+# Fuente 2 agrupa en una fila lo que el modelo lleva en dos. Se declara
+# explicito y no se adivina: las hectareas de la fila agrupada cuadran con la
+# suma de las partes (19,84 = 12,18 + 7,66 y 2,53 = 1,41 + 1,12), que es lo que
+# permite afirmar que son la misma cosa mirada con menos detalle.
+FUENTE2_AGRUPA = {
+    "santina": ["Santina", "Santina Macro Tunel"],
+    "fukumoto-caracara": ["Cara Cara", "Fukumoto"],
+}
+
+# Cuantas temporadas de cosecha real trae la hoja, y como se llaman. La ultima
+# es siempre 2025-2026: ver la verificacion en cruzar_cosechas().
+TEMPORADAS_COSECHA = ["2023-2024", "2024-2025", "2025-2026"]
+
+ANIO_COSECHA = re.compile(r"(?:cosecha|embalado)\s*(\d{4})", re.I)
+CAJA_F2 = re.compile(r"(?:cja|caja)\s*([\d,.]+)", re.I)
+
+
+def leer_fuente2(ws):
+    """Cosecha real por variedad, de la hoja 'Fuente 2 Rendimientos'.
+
+    La hoja son seis bloques apilados, uno por especie, cada uno con su unidad
+    y su propio juego de temporadas: las cerezas se rotulan por el ano en que se
+    cosechan (nov-dic) y la uva de mesa por el ano en que se embala (ene-abr),
+    asi que la temporada 2023-2024 aparece como "Cosecha 2023" en un bloque y
+    como "Embalado 2024" en el otro. Los ciruelos traen solo dos temporadas.
+
+    El bloque se reconoce por la fila que rotula las temporadas, no por la
+    palabra "Especie": el bloque de citricos la escribe distinto y con eso se
+    perdia entero.
+    """
+    bloques = []
+    for r in range(1, ws.max_row + 1):
+        anios = {}
+        for c in range(3, 8):
+            m = ANIO_COSECHA.search(str(ws.cell(r, c).value or ""))
+            if m:
+                anios[c] = int(m.group(1))
+        if len(anios) < 2:
+            continue
+        # La unidad va una fila mas arriba, al lado del nombre de la especie.
+        arriba = " | ".join(str(ws.cell(r - 1, c).value or "") for c in range(2, 7))
+        caja = CAJA_F2.search(arriba)
+        en_cajas = bool(caja)
+        filas = []
+        rr = r + 1
+        while rr <= ws.max_row:
+            nombre = ws.cell(rr, 2).value
+            if not nombre:
+                break
+            nombre = str(nombre).strip()
+            if norm(nombre) == "total general":
+                break
+            filas.append((nombre, ws.cell(rr, 3).value,
+                          [ws.cell(rr, c).value for c in sorted(anios)]))
+            rr += 1
+        if filas:
+            bloques.append({
+                "anios": [anios[c] for c in sorted(anios)],
+                "en_cajas": en_cajas, "filas": filas, "fila": r,
+            })
+
+    if not bloques:
+        raise SystemExit(
+            "No se encontro ningun bloque en 'Fuente 2 Rendimientos'.\n"
+            "Se buscan filas con dos o mas rotulos tipo 'Cosecha 2024' o\n"
+            "'Embalado 2025' entre las columnas C y G. Si la hoja se reordeno,\n"
+            "hay que ajustar leer_fuente2() en tools/modelo_to_json.py.")
+
+    # Las temporadas se alinean por la derecha: la ultima columna de cada bloque
+    # es 2025-2026, y de ahi hacia atras. No se supone -se verifica contra la
+    # produccion 25/26 de la Ficha, en cruzar_cosechas()-.
+    n = len(TEMPORADAS_COSECHA)
+    salida = {}
+    for b in bloques:
+        ultimo = b["anios"][-1]
+        for nombre, ha, valores in b["filas"]:
+            serie = [None] * n
+            for anio, v in zip(b["anios"], valores):
+                i = n - 1 - (ultimo - anio)
+                if 0 <= i < n:
+                    serie[i] = v
+            salida[norm(nombre)] = {
+                "nombre": nombre, "ha": ha, "serie": serie,
+                "en_cajas": b["en_cajas"],
+            }
+    return salida
+
+
+def cruzar_cosechas(fuente2, variedades):
+    """Pega la cosecha real a cada variedad del modelo y revisa que calce.
+
+    Tres cosas se comprueban, y ninguna se arregla en silencio:
+      - que la ultima temporada de Fuente 2 sea la misma produccion 25/26 que
+        ya trae la Ficha, que es lo que confirma que las temporadas quedaron
+        alineadas y no corridas un ano;
+      - que la unidad del bloque coincida con la del modelo, porque un bloque
+        en cajas leido como kilos da un rendimiento ocho veces menor;
+      - que la superficie de la fila agrupada sea la suma de sus partes.
+    """
+    avisos = {"sin_cosecha": [], "desalineadas": [], "unidad_distinta": [],
+              "difieren_de_ficha": [], "agrupadas": [], "rend_es_total": []}
+
+    # Como se escribe de verdad cada variedad. Las claves de FUENTE2_AGRUPA van
+    # sin tildes porque este archivo se lee en consolas que no siempre pueden
+    # con ellas, pero lo que se muestra en el mapa tiene que salir del modelo:
+    # "Santina Macro Tunel" escrito asi en pantalla es una falta de ortografia.
+    como_se_escribe = {norm(r["variedad"]): r["variedad"] for r in variedades.values()}
+    bonito = lambda nombre: como_se_escribe.get(norm(nombre), nombre)
+
+    # Que fila de Fuente 2 le toca a cada variedad del modelo.
+    de_variedad = {}
+    for clave_f2, dato in fuente2.items():
+        partes = FUENTE2_AGRUPA.get(clave_f2)
+        if partes:
+            for nombre in partes:
+                de_variedad[norm(nombre)] = (dato, clave_f2)
+        else:
+            de_variedad[clave_f2] = (dato, None)
+
+    n = len(TEMPORADAS_COSECHA)
+    for reg in variedades.values():
+        par = de_variedad.get(norm(reg["variedad"]))
+        if par is None:
+            avisos["sin_cosecha"].append(reg["variedad"])
+            reg["cosecha"] = None
+            continue
+        dato, agrupada = par
+        factor = reg.get("kg_por_unidad") or 1.0
+        if dato["en_cajas"] != (factor > 1):
+            avisos["unidad_distinta"].append(
+                "%s: Fuente 2 %s y el modelo %s"
+                % (reg["variedad"], "en cajas" if dato["en_cajas"] else "en kilos",
+                   "en cajas" if factor > 1 else "en kilos"))
+
+        # El rendimiento es siempre el de la fila: en una agrupada, la hoja midio
+        # los dos panos juntos y no hay como separarlos, asi que los dos reciben
+        # el rendimiento del conjunto -que es lo que de verdad se midio- y queda
+        # marcado en "agrupada".
+        ha_fila = dato["ha"] or reg["ha"]
+        kg_fila = [None if v is None else v * factor for v in dato["serie"]]
+        rend = [None if v is None or not ha_fila else round(v / ha_fila) for v in kg_fila]
+        # Los KILOS, en cambio, se reparten por superficie entre las partes. Sin
+        # esto las dos variedades de una fila agrupada llevan cada una el total
+        # del par, y cualquier suma -el total del predio, el de un cuartel
+        # mixto- lo cuenta dos veces. Repartir por hectarea es la unica division
+        # que conserva el total y deja a las dos con el rendimiento medido.
+        cuota = 1.0 if not agrupada or not ha_fila else (reg["ha"] / ha_fila)
+        kg = [None if v is None else round(v * cuota) for v in kg_fila]
+
+        # La ultima temporada tiene que ser la produccion 25/26 que ya teniamos.
+        h = reg.get("historico") or {}
+        ficha_2526 = h.get("prod_25_26")
+        propio_2526 = None if kg_fila[n - 1] is None else kg_fila[n - 1] / factor
+        if agrupada is None and ficha_2526 is not None and propio_2526 is not None:
+            if abs(ficha_2526 - propio_2526) > max(1.0, 0.005 * abs(propio_2526)):
+                avisos["desalineadas"].append(
+                    "%s: Ficha 25/26 %s vs Fuente 2 %s"
+                    % (reg["variedad"], round(ficha_2526), round(propio_2526)))
+
+        # Donde Fuente 2 y la Ficha no dicen lo mismo en 23/24 o 24/25.
+        difiere = [False] * n
+        for i, campo in enumerate(("prod_23_24", "prod_24_25")):
+            a, b = h.get(campo), None if dato["serie"][i] is None else dato["serie"][i]
+            if a is not None and b is not None and abs(a - b) > max(1.0, 0.005 * abs(b)):
+                difiere[i] = True
+        if any(difiere) and agrupada is None:
+            avisos["difieren_de_ficha"].append(reg["variedad"])
+
+        if agrupada:
+            avisos["agrupadas"].append("%s (con %s)" % (
+                reg["variedad"],
+                " + ".join(bonito(x) for x in FUENTE2_AGRUPA[agrupada]
+                           if norm(x) != norm(reg["variedad"]))))
+
+        # ¿La celda rend_25_26 de 'Inputs Generales' trae un rendimiento o un
+        # total? Con la cosecha real a mano se puede distinguir sin adivinar:
+        # si el valor calza con los KILOS TOTALES de la temporada y no con los
+        # kilos por hectarea, la celda lleva un total, y el modelo -que la
+        # multiplica por la superficie- termina inflando la temporada entera
+        # por un factor igual a las hectareas. No se corrige aca: se avisa.
+        rend_libro = reg.get("rend_25_26")
+        total_unid = propio_2526
+        esperado = None if not ha_fila or total_unid is None else total_unid / ha_fila
+        if (agrupada is None and rend_libro and total_unid and esperado
+                and abs(rend_libro - total_unid) <= max(1.0, 0.005 * total_unid)
+                and abs(rend_libro - esperado) > max(1.0, 0.05 * esperado)):
+            ingreso_libro = (reg["ingresos"] or [None])[0]
+            precio = reg.get("precio_efectivo") or 0
+            avisos["rend_es_total"].append({
+                "variedad": reg["variedad"],
+                "especie": reg["especie"],
+                "celda": round(rend_libro),
+                "rendimiento_real": round(esperado),
+                "factor": round(ha_fila, 2),
+                "ingreso_modelado": None if ingreso_libro is None else round(ingreso_libro),
+                "ingreso_implicado": round(total_unid * precio) if precio else None,
+            })
+
+        reg["cosecha"] = {
+            "kg": kg,
+            "rend_kg_ha": rend,
+            "ha": round(ha_fila, 3) if ha_fila else None,
+            "agrupada": (" + ".join(bonito(x) for x in FUENTE2_AGRUPA[agrupada])
+                         if agrupada else None),
+            "difiere_de_ficha": difiere,
+        }
+    # Cada bloque de la hoja rotula sus temporadas a su manera -la cereza por el
+    # ano en que se cosecha, la uva de mesa por el ano en que se embala-, asi
+    # que las columnas se alinean por la derecha. Que la ultima coincida con la
+    # produccion 25/26 que ya traia la Ficha es lo que demuestra que la
+    # alineacion quedo bien. Si deja de coincidir, la serie entera esta corrida
+    # un ano y el mapa mostraria la cosecha de una temporada rotulada como otra:
+    # eso no es un aviso al pie, es motivo para no generar el archivo.
+    if avisos["desalineadas"]:
+        raise SystemExit(
+            "Las temporadas de 'Fuente 2 Rendimientos' dejaron de calzar con la\n"
+            "produccion 25/26 de la Ficha Tecnica ('Base Chada'). Las columnas se\n"
+            "alinean por la derecha suponiendo que la ultima de cada bloque es la\n"
+            "temporada 2025-2026; si se agrego una temporada nueva a la hoja, hay\n"
+            "que actualizar TEMPORADAS_COSECHA en tools/modelo_to_json.py.\n\n"
+            "No calzan:\n  " + "\n  ".join(avisos["desalineadas"][:12]))
+    return avisos
+
+
 def reportar_cambios(anterior, salida):
     """Que cambio respecto de la corrida anterior.
 
@@ -480,6 +705,7 @@ def main():
     supuestos, inputs_var = leer_inputs(wb["Inputs Generales"])
     plantaciones, ha_tasacion = leer_plantaciones(wb["Detalle Plantaciones"])
     base = leer_base(wb["Base Chada"])
+    fuente2 = leer_fuente2(wb["Fuente 2 Rendimientos"])
 
     faltantes = []
     for clave, reg in variedades.items():
@@ -563,6 +789,11 @@ def main():
         # una razon sin unidad-, es plata por kilo.
         reg["ebitda_kg"] = por_kg(reg["ebitda"])
 
+    # ── Cosecha real ──────────────────────────────────────────────────────
+    # Va despues del bucle de arriba porque necesita kg_por_unidad y el
+    # historico de la Ficha, que se arman ahi.
+    avisos_cosecha = cruzar_cosechas(fuente2, variedades)
+
     # ── Cruce con los cuarteles del KMZ ───────────────────────────────────
     geo = json.loads((RAIZ / "geo_data.json").read_text(encoding="utf-8"))
     cuarteles_por_clave = {}
@@ -629,6 +860,27 @@ def main():
         for campo, fuente in (("ingreso_kg", "ingresos"), ("costo_kg", "costos"), ("ebitda_kg", "ebitda")):
             e[campo] = [None if not k else round(x / k, 4) for x, k in zip(e[fuente], e["kg"])]
 
+    # ── Agregado de la cosecha real ───────────────────────────────────────
+    # Los kilos ya vienen convertidos, asi que la suma significa algo. Las
+    # hectareas del denominador son las de cada temporada CON dato: sumar sobre
+    # las 292 ha completas cuando media hacienda todavia no entraba en
+    # produccion daria un rendimiento que no es el de nadie.
+    n_cos = len(TEMPORADAS_COSECHA)
+    cosechas = {"temporadas": list(TEMPORADAS_COSECHA),
+                "kg": [0] * n_cos, "ha": [0.0] * n_cos}
+    for reg in variedades.values():
+        c = reg.get("cosecha")
+        if not c:
+            continue
+        for i in range(n_cos):
+            if c["kg"][i] is None:
+                continue
+            cosechas["kg"][i] += c["kg"][i]
+            cosechas["ha"][i] += reg["ha"]
+    cosechas["ha"] = [round(x, 2) for x in cosechas["ha"]]
+    cosechas["rend_kg_ha"] = [None if not h else round(k / h)
+                              for k, h in zip(cosechas["kg"], cosechas["ha"])]
+
     # ── Conciliacion de superficies ───────────────────────────────────────
     # El puente de la tasacion al modelo. Los tres numeros que Rolando usa para
     # explicar el predio, con el delta explicito entre cada par.
@@ -657,6 +909,7 @@ def main():
         "supuestos": supuestos,
         "conciliacion_superficie": conciliacion,
         "totales": totales,
+        "cosechas": cosechas,
         "por_especie": sorted(por_especie.values(), key=lambda e: -e["ha"]),
         "variedades": sorted(variedades.values(), key=lambda r: (r["especie"], -r["ha"])),
         "avisos": {
@@ -667,6 +920,7 @@ def main():
             "cuarteles_sin_modelo": sorted(set(sin_modelo)),
             "ha_detalle_plantaciones": ha_tasacion,
             "inputs_faltantes": faltantes,
+            "cosecha": avisos_cosecha,
         },
     }
 
@@ -681,6 +935,26 @@ def main():
 
     print("OK %s" % destino)
     print("  variedades=%d  ha=%s  temporadas=%d" % (len(variedades), ha_total, len(temporadas)))
+    print("  cosecha real  %s" % "  ".join(
+        "%s %s t" % (t, format(round(k / 1000), ",d"))
+        for t, k in zip(cosechas["temporadas"], cosechas["kg"])))
+
+    malas = avisos_cosecha["rend_es_total"]
+    if malas:
+        print("")
+        print("  !! REVISAR EL LIBRO: 'Inputs Generales', columna Rendimiento 25/26")
+        print("     Estas celdas traen los KILOS TOTALES de la temporada y no los")
+        print("     kilos por hectarea. El modelo las multiplica por la superficie,")
+        print("     asi que la temporada 2025-2026 queda inflada por ese factor.")
+        for m in malas:
+            print("       %-22s celda %-10s deberia ser %-8s (x%s ha)"
+                  % (m["variedad"], format(m["celda"], ",d"),
+                     format(m["rendimiento_real"], ",d"), m["factor"]))
+            if m["ingreso_modelado"] is not None and m["ingreso_implicado"] is not None:
+                print("         ingresos 25/26 modelados US$ %s  vs US$ %s implicados por la cosecha"
+                      % (format(m["ingreso_modelado"], ",d"), format(m["ingreso_implicado"], ",d")))
+        exceso = sum((m["ingreso_modelado"] or 0) - (m["ingreso_implicado"] or 0) for m in malas)
+        print("     Exceso de ingresos en 2025-2026: US$ %s" % format(round(exceso), ",d"))
     print("  EBITDA %s: US$ %s  (%s US$/ha)" % (temporadas[0], format(totales["ebitda"][0], ",d"), totales["ebitda_ha"][0]))
     print("  EBITDA %s: US$ %s  (%s US$/ha)" % (temporadas[3], format(totales["ebitda"][3], ",d"), totales["ebitda_ha"][3]))
     for k, v in salida["avisos"].items():

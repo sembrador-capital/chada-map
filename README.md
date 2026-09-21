@@ -160,7 +160,35 @@ a **nombre de variedad**, que es lo que permite leer el predio por variedad sin
 tener que ir al color; la variedad entra antes en zoom y con letra más grande,
 porque «Sweet Celebration» a 9 px no se lee, se adivina.
 
-**Producción** — rendimiento en kg/ha por temporada, rampa secuencial.
+**Producción** — se abre por dos caras, en una subpestaña.
+
+*Proyectada (modelo)* es el rendimiento en kg/ha que el modelo asume, por
+temporada. *Cosecha real* es lo que el campo efectivamente dio, de la hoja
+**Fuente 2 Rendimientos**: tres temporadas, 2023/24, 2024/25 y 2025/26. Las dos
+usan **la misma escala** —mismos cortes, mismos colores—, que es lo que permite
+saltar de una a otra y ver de inmediato dónde la proyección le pide al campo más
+de lo que ha dado.
+
+La hoja mide por variedad, así que cada cuartel recibe el rendimiento de la suya;
+un cuartel mixto recompone el suyo con los kilos de sus variedades sobre sus
+hectáreas, no promediando rendimientos. La barra de métricas agrega un punto de
+comparación permanente: qué porcentaje de la plena producción del modelo
+representa la temporada que se está mirando (2025/26 va en 71,9%), y el gráfico
+del panel marca esa plena producción con una línea de referencia. En 2024/25 el
+campo la superó.
+
+Dos detalles de la fuente, ambos visibles en el mapa:
+
+- Las hectáreas del denominador son las que **tenían cosecha registrada** esa
+  temporada, no las 292,23 del predio. En 2023/24 buena parte del campo todavía
+  no entraba en producción (271,28 ha), y dividir por el total daría un
+  rendimiento que no es el de ningún cuartel.
+- Fuente 2 lleva en una sola fila **Santina con Santina Macro Túnel** y **Cara
+  Cara con Fukumoto** —sus hectáreas cuadran con la suma de las partes, que es
+  lo que permite afirmar que son la misma cosa con menos detalle—. Las dos de
+  cada par reciben el rendimiento del conjunto, que es lo que de verdad se midió,
+  y los kilos se reparten por superficie para que ninguna suma cuente dos veces.
+  Van marcadas con `*` en la tabla.
 
 **Financiero** — dos familias de métricas, y el modo entero sigue a la que se
 elija: la barra de métricas, la tabla del panel y el ranking por variedad hablan
@@ -304,8 +332,35 @@ encuadraba contra un ancho que en pantalla no existe y dejaba el tercio oriente
 
 ## Hallazgos sobre los datos
 
-Dos cosas que el cruce dejó a la vista. Ninguna se corrige en silencio: las dos
-salen en el panel y en la ficha del cuartel.
+Cuatro cosas que el cruce dejó a la vista. Ninguna se corrige en silencio: todas
+salen en el panel y, donde corresponde, en la ficha del cuartel.
+
+**0. La celda de rendimiento 25/26 de la vinífera trae un total, no un
+rendimiento.** En `Inputs Generales`, la columna *Rendimiento 25/26* de Cabernet
+Sauvignon marca **46.622**, que es exactamente el total de kilos cosechados esa
+temporada según Fuente 2 —el rendimiento real es 1.225 kg/ha—. Cabernet Franc
+tiene el mismo problema: 3.987 contra 1.133. El modelo multiplica esa celda por
+la superficie, así que la temporada 2025-2026 queda inflada por un factor igual a
+las hectáreas: **US$ 457.206 de ingresos de más**, casi todo de Cabernet
+Sauvignon (US$ 466.833 modelados contra US$ 12.271 que implica la cosecha real).
+Sobre un EBITDA 25/26 de −167.712, no es un detalle.
+
+Se detecta sin adivinar, comparando contra la cosecha real: si la celda calza con
+los **kilos totales** de la temporada y no con los kilos por hectárea, lleva un
+total. El mapa no la corrige —muestra el libro tal cual— y deja la cosecha real
+al lado, en *Producción ▸ Cosecha real*.
+
+**0b. Las dos fuentes de historia no dicen lo mismo.** `Fuente 2 Rendimientos` y
+la Ficha Técnica —que es la que alimenta `Base Chada` y, por ahí, el modelo—
+coinciden **exactamente** en 2025/26, en las 33 variedades. En 2023/24 y 2024/25
+difieren en 19 de 33, algunas por mucho: Lapins 24/25 da 109.950 kg según la
+Ficha y 406.772 según Fuente 2. El mapa pinta Fuente 2, que es la hoja cuyas
+hectáreas suman las 292,23 ha del modelo (la Ficha suma 301,01: es anterior al
+arranque de la vinífera). La coincidencia exacta en 25/26 es además lo que
+confirma que las temporadas quedaron alineadas y no corridas un año, porque cada
+bloque de la hoja rotula distinto —la cereza por el año en que se cosecha, la uva
+de mesa por el año en que se embala—; el extractor lo verifica variedad por
+variedad y aborta si deja de calzar.
 
 **1. El bloque PRODUCCIÓN de Uva Vinífera está corrido una fila.** En
 `Consolidado por variedad`, la fila de Cabernet Franc lleva la producción de

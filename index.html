@@ -477,6 +477,10 @@ body.panel-abierto .modelo-panel { display:flex; }
 .mp-tabla td { padding:4px; text-align:right; border-bottom:var(--sem-border-soft); color:var(--sem-ink); }
 .mp-tabla td:first-child { text-align:left; display:flex; align-items:center; gap:6px; }
 .mp-tabla td.neg { color:var(--neg-3); }
+/* La columna de la temporada que está pintando el mapa, marcada: con tres
+   temporadas en fila hay que poder decir cuál es la que se está viendo. */
+.mp-tabla td.col-activa { font-weight:600; color:var(--sem-navy); background:var(--sem-navy-wash); }
+.mp-tabla th.col-activa { color:var(--sem-navy); }
 .mp-tabla tbody tr { cursor:pointer; }
 .mp-tabla tbody tr:hover td { background:var(--sem-beige-wash); }
 .mp-tabla .lg-dot { flex:0 0 8px; width:8px; height:8px; }
@@ -488,6 +492,8 @@ body.panel-abierto .modelo-panel { display:flex; }
 .mp-conc tr.resta td { color:var(--sem-text-2); }
 .mp-conc-nota { font-size:9.5px; color:var(--sem-text-3); margin-top:6px; line-height:1.45; }
 .mp-aviso { font-size:10px; line-height:1.45; color:var(--sem-ink); background:var(--sem-beige-wash); border-left:2px solid var(--neg-3); padding:7px 9px; border-radius:0 var(--sem-radius) var(--sem-radius) 0; margin-top:9px; }
+/* Un hallazgo que mueve la plata no puede verse igual que una nota al pie. */
+.mp-aviso.grave { background:#fdeceb; border-left-width:3px; border-left-color:var(--neg-4); }
 
 /* ── COMPONENTE 8 · Asa del panel ───────────────────────────────────────── */
 /* El panel arranca cerrado: lo primero que se viene a ver es el mapa, y 392 px
@@ -611,6 +617,13 @@ body.panel-abierto .data-stamp { right:408px; }
     <div class="fc-group" id="grpMetrica" hidden>
         <label class="fc-label" for="selMetrica">Métrica</label>
         <select class="fc-select" id="selMetrica"></select>
+    </div>
+    <div class="fc-group" id="grpSubProd" hidden>
+        <label class="fc-label">Ver</label>
+        <div class="seg" id="segProd" role="group" aria-label="Qué producción mirar">
+            <button type="button" data-sub="modelo" class="activo">Proyectada (modelo)</button>
+            <button type="button" data-sub="cosecha">Cosecha real</button>
+        </div>
     </div>
     <div class="fc-group" id="grpSubSuelo" hidden>
         <label class="fc-label">Ver</label>
@@ -957,6 +970,14 @@ let HA_ESPECIE = {}, HA_VKEY = {};   // hectáreas del modelo, agregadas al KMZ
 const visibles = new Set();
 let modo = 'general', modoColor = 'variedad', metrica = 'ebitda_ha', t = 3;
 let subSuelo = 'fisico', metricaSuelo = 'clase';
+/* Producción tiene dos caras, como Suelos: lo que el modelo proyecta y lo que
+   el campo cosechó. Van con la MISMA escala de kg/ha a propósito -mismos
+   cortes, mismos colores-, que es lo que permite mirar una y otra y ver de
+   inmediato dónde la proyección le pide al campo más de lo que ha dado.
+   tc es el índice de la temporada real y vive aparte de t: son dos ejes de
+   tiempo distintos y compartirlos haría que elegir 2023-2024 en una dejara la
+   otra en una temporada que no existe. */
+let subProd = 'modelo', tc = 0;
 let SUELO = {};                // clase -> entrada de la simbología del plano
 let UTILES = 1;                // temporadas hasta plena producción, inclusive
 let vistaGrafico = 'serie', ordenTabla = { campo: 'ebitda_ha', asc: false };
@@ -970,6 +991,9 @@ const panelAbierto = () => document.body.classList.contains('panel-abierto');
 /* Dentro de Suelos, qué cara se está mirando. */
 const verTerreno = () => modo === 'suelos' && subSuelo === 'terreno';
 const verFisico  = () => modo === 'suelos' && subSuelo === 'fisico';
+/* Y dentro de Producción. */
+const verCosecha = () => modo === 'produccion' && subProd === 'cosecha';
+const temporadaActual = () => verCosecha() ? MOD.cosechas.temporadas[tc] : MOD.temporadas[t];
 
 const escalaActiva = () => modo === 'produccion' ? ESCALAS.rend_kg_ha
     : modo === 'suelos' ? ESCALAS[metricaSuelo] : ESCALAS[metrica];
@@ -978,6 +1002,7 @@ const escalaActiva = () => modo === 'produccion' ? ESCALAS.rend_kg_ha
    propio cuartel y no se ponderan ni se cruzan con el modelo. */
 const valorPintado = p => verTerreno() ? (p[metricaSuelo] ?? null)
     : verFisico() ? ((obj(p.suelo) || {}).prof_cm ?? null)
+    : verCosecha() ? valorCosecha(p, tc)
     : valorCuartel(p, modo === 'produccion' ? 'rend_kg_ha' : metrica, t);
 
 /* El color de un cuartel: identidad, simbología del plano o clase de escala. */
@@ -1024,6 +1049,10 @@ Promise.all([traer('geo_data.json'), traer('modelo_data.json')]).then(([geo, mod
     (GEO.suelos ? GEO.suelos.simbologia : []).forEach(s => { SUELO[s.clase] = s; });
 
     t = UTILES - 1;
+    // La cosecha arranca en la última temporada que tenga kilos registrados:
+    // abrir en 2023-2024 mostraría el campo a medio entrar en producción como
+    // si fuera su estado actual.
+    tc = MOD.cosechas.kg.reduce((ult, kg, i) => kg ? i : ult, 0);
     prepararPaletas();
     construirSelectores();
     construirLeyenda();
@@ -1162,6 +1191,25 @@ function valorCuartel(p, campo, temporada) {
     });
     return den ? num / den : null;
 }
+
+/* Rendimiento realmente cosechado en un cuartel. Es una razón, así que se
+   recompone igual que las demás: kilos del cuartel sobre hectáreas del cuartel.
+   Los kilos de una fila agrupada ya vienen repartidos entre sus partes desde el
+   extractor, así que sumarlos aquí no cuenta nada dos veces. */
+function valorCosecha(p, temporada) {
+    const claves = arr(p.modelo).filter(k => MIDX[k]);
+    let kg = 0, ha = 0;
+    claves.forEach(k => {
+        const v = MIDX[k], c = v.cosecha;
+        if (!c || c.kg[temporada] == null) return;
+        kg += c.kg[temporada]; ha += v.ha;
+    });
+    return ha ? kg / ha : null;
+}
+
+/* Las variedades de un cuartel que tienen cosecha registrada esa temporada. */
+const regsConCosecha = (regs, temporada) =>
+    regs.filter(v => v.cosecha && v.cosecha.kg[temporada] != null);
 
 function colorEscala(valor, escala) {
     if (valor == null) return css('--dat-sindato');
@@ -1401,6 +1449,33 @@ function mostrarFicha(p, punto, fija = false) {
                 : '');
         if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
         if (p.aprox) avisos.push('Cruce aproximado: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
+
+    } else if (verCosecha()) {
+        const conDato = regsConCosecha(regs, tc);
+        const real = valorCosecha(p, tc);
+        const meta = valorCuartel(p, 'rend_kg_ha', UTILES - 1);
+        const kg = conDato.reduce((a, v) => a + v.cosecha.kg[tc], 0);
+        cuerpo = conDato.length
+            ? kv('Cosechado', miles(real) + ' kg/ha') +
+              kv('Total', miles(kg) + ' kg') +
+              (meta ? kv('Plena producción', miles(meta) + ' kg/ha') +
+                      kv('Avance', pct(real / meta), real < meta ? ' neg' : ' pos') : '') +
+              // Las tres temporadas seguidas, que es lo que muestra si el
+              // cuartel viene subiendo o si tuvo un año malo.
+              sec('Por temporada', MOD.cosechas.temporadas.map((nom, i) => {
+                  const v = valorCosecha(p, i);
+                  return chip(esc(nom.replace('-', '/')), v == null ? 'sin registro' : miles(v) + ' kg/ha');
+              }).join('')) +
+              (regs.length > 1 ? sec('Por variedad', conDato.map(v =>
+                  chip(esc(v.variedad), miles(v.cosecha.rend_kg_ha[tc]) + ' kg/ha')).join('')) : '')
+            : '';
+        if (!conDato.length) avisos.push('Sin cosecha registrada en esta temporada.');
+        const agr = conDato.filter(v => v.cosecha.agrupada);
+        if (agr.length) avisos.push('La hoja mide juntas <b>' + esc(agr[0].cosecha.agrupada) +
+            '</b>: las dos llevan el rendimiento del conjunto.');
+        if (conDato.some(v => v.cosecha.difiere_de_ficha[tc])) {
+            avisos.push('<b>Las dos fuentes no coinciden</b> en esta temporada: <i>Fuente 2 Rendimientos</i> y la Ficha Técnica dan cifras distintas. Acá va la de Fuente 2.');
+        }
 
     } else if (modo === 'produccion') {
         const ultima = MOD.temporadas.length - 1;
@@ -1644,7 +1719,7 @@ function pintarEscala() {
         <div class="escala-sub">${esc(e.unidad)}${e.tipo === 'terreno'
             ? ' · DEM ' + esc(GEO.terreno.fuente)
             : e.tipo === 'suelo' ? ' · plano de la hacienda'
-            : ' · ' + esc(MOD.temporadas[t])}</div>
+            : ' · ' + esc(temporadaActual()) + (verCosecha() ? ' · cosechado' : '')}</div>
         <div class="escala-barra">${e.tokens.map(tk => `<i style="background:${css(tk)}"></i>`).join('')}</div>
         <div class="escala-ticks">${ticks.map(x => `<span>${esc(x)}</span>`).join('')}</div>
         <div class="escala-nd"><i style="background:${css('--dat-sindato')}"></i>Sin contraparte en el modelo</div>`;
@@ -1775,6 +1850,27 @@ function pintarMetricasBarra() {
             <div class="stat"><span class="stat-val">${conDem.length}</span><span class="stat-lbl">${plural(conDem.length, 'Cuartel', 'Cuarteles')}</span></div>`;
         return;
     }
+    if (verCosecha()) {
+        // Las hectáreas del denominador son las que tenían cosecha registrada
+        // esa temporada, no las 292 del predio: en 2023-2024 buena parte del
+        // campo todavía no entraba en producción, y dividir por el total daría
+        // un rendimiento que no es el de ningún cuartel.
+        const c = regsConCosecha(regs, tc);
+        const kg = c.reduce((x, v) => x + v.cosecha.kg[tc], 0);
+        const ha = c.reduce((x, v) => x + v.ha, 0);
+        // Contra qué se compara: lo que el modelo pide en plena producción.
+        const plena = agregado(regs, UTILES - 1);
+        const meta = plena.ha ? plena.kg / plena.ha : null;
+        const real = ha ? kg / ha : null;
+        $('statsBar').innerHTML = `
+            <div class="stat"><span class="stat-val">${nf(ha, 1)}</span><span class="stat-lbl">ha cosechadas</span></div>
+            <div class="stat"><span class="stat-val">${nf(kg / 1000, 0)}</span><span class="stat-lbl">Toneladas</span></div>
+            <div class="stat"><span class="stat-val">${miles(real)}</span><span class="stat-lbl">kg / ha</span></div>
+            <div class="stat"><span class="stat-val">${miles(meta)}</span><span class="stat-lbl">kg/ha en plena prod.</span></div>
+            <div class="stat"><span class="stat-val${real && meta && real < meta ? ' neg' : ''}">${
+                real && meta ? pct(real / meta) : '—'}</span><span class="stat-lbl">de la plena prod.</span></div>`;
+        return;
+    }
     if (modo === 'produccion') {
         $('statsBar').innerHTML = `
             <div class="stat"><span class="stat-val">${nf(a.ha, 1)}</span><span class="stat-lbl">${etiquetaHa}</span></div>
@@ -1814,6 +1910,7 @@ const TITULO_PANEL = {
 };
 const tituloPanel = () => modo === 'suelos'
     ? (subSuelo === 'terreno' ? 'Terreno' : 'Tipo de suelo')
+    : verCosecha() ? 'Cosecha real'
     : (TITULO_PANEL[modo] || 'Datos');
 
 /* Los cuarteles dibujados de las ramas encendidas. Terreno y suelo se miden
@@ -1859,7 +1956,7 @@ function pintarPanel() {
     // Sólo la temporada, y sólo donde la hay: las hectáreas encendidas ya están
     // en la barra de métricas.
     $('mpSub').textContent = (modo === 'produccion' || modo === 'financiero')
-        ? MOD.temporadas[t] : GEO.farm.name;
+        ? temporadaActual() : GEO.farm.name;
     // Las dos vistas de gráfico son de Producción y Financiero; en los demás
     // modos hay una sola cosa que mostrar.
     $('mpChartTabs').hidden = !(modo === 'produccion' || modo === 'financiero');
@@ -1867,7 +1964,8 @@ function pintarPanel() {
     // por tipo: el encabezado decía «Tabla por variedad» sobre una tabla cuya
     // primera columna era «Especie».
     $('tituloTabla').textContent = verFisico() ? 'Tabla por tipo de suelo'
-        : (modo === 'general' || verTerreno()) ? 'Tabla por especie' : 'Tabla por variedad';
+        : (modo === 'general' || verTerreno()) ? 'Tabla por especie'
+        : verCosecha() ? 'Cosecha por variedad' : 'Tabla por variedad';
     dibujarGrafico(regs);
     pintarTabla(regs);
     pintarConciliacion();
@@ -1877,7 +1975,42 @@ function pintarPanel() {
 function pintarTabla(regs) {
     if (modo === 'general' || verTerreno()) return tablaEspecies();
     if (verFisico()) return tablaSuelos();
+    if (verCosecha()) return tablaCosecha(regs);
     return tablaVariedades(regs);
+}
+
+/* Las tres temporadas cosechadas, una al lado de la otra, más lo que el modelo
+   pide en plena producción. Puestas en fila se lee de un vistazo qué variedad
+   viene subiendo, cuál tuvo un año malo y cuál está lejos de lo que el modelo
+   le exige, que es la pregunta que abre esta pestaña. */
+function tablaCosecha(regs) {
+    const cols = [{ k: 'variedad', t: 'Variedad' },
+                  { k: 'c0', t: '23/24' }, { k: 'c1', t: '24/25' }, { k: 'c2', t: '25/26' },
+                  { k: 'avance', t: '% plena' }];
+    if (!cols.some(c => c.k === ordenTabla.campo)) ordenTabla = { campo: 'c' + tc, asc: false };
+
+    const datos = regs.filter(v => v.cosecha).map(v => {
+        const meta = v.rend_kg_ha[UTILES - 1];
+        const fila = { variedad: v.variedad, especie: v.especie, ha: v.ha, reg: v, meta,
+                       agrupada: !!v.cosecha.agrupada };
+        v.cosecha.rend_kg_ha.forEach((x, i) => { fila['c' + i] = x; });
+        fila.avance = meta && fila['c' + tc] != null ? fila['c' + tc] / meta : null;
+        return fila;
+    });
+    const filas = ordenarPor(datos, ordenTabla.campo, ordenTabla.campo === 'variedad').map(f => {
+        const color = COLOR_VARIEDAD[VKEY_DE_MODELO[vkey(f.especie, f.variedad)]] || css('--dat-sindato');
+        const celda = k => k === 'avance' ? (f.avance == null ? '—' : pct(f.avance))
+            : f[k] == null ? '—' : miles(f[k]);
+        return `<tr data-variedad="${esc(vkey(f.especie, f.variedad))}"${
+            f.agrupada ? ' title="La hoja mide esta variedad junto con otra: las dos llevan el rendimiento del conjunto"' : ''}>
+            <td><i class="lg-dot" style="background:${color}"></i>${esc(f.variedad)}${f.agrupada ? ' *' : ''}</td>
+            ${['c0', 'c1', 'c2'].map(k => `<td class="${k === 'c' + tc ? 'col-activa' : ''}">${celda(k)}</td>`).join('')}
+            <td class="${f.avance != null && f.avance < 1 ? 'neg' : ''}">${celda('avance')}</td>
+        </tr>`;
+    }).join('');
+    filaTabla(cols, () => tablaCosecha(clavesVisibles()), filas);
+    $('tabla').querySelectorAll('tbody tr').forEach(tr =>
+        tr.addEventListener('click', () => volarAVariedad(tr.dataset.variedad)));
 }
 
 function filaTabla(cols, ordenar, filas) {
@@ -1999,9 +2132,39 @@ function pintarConciliacion() {
         'un contorno dibujado no es una medición, y mezclarlo con la tasación descuadraría los totales.';
 
     const av = MOD.avisos, partes = [];
+    const cos = av.cosecha || {};
+
+    // El más caro primero: una celda mal puesta que infla una temporada entera.
+    if (cos.rend_es_total && cos.rend_es_total.length) {
+        const exceso = cos.rend_es_total.reduce((a, m) => a + ((m.ingreso_modelado || 0) - (m.ingreso_implicado || 0)), 0);
+        partes.push('<div class="mp-aviso grave"><b>Revisar el libro: rendimiento 25/26 en <i>Inputs Generales</i>.</b> ' +
+            'En ' + cos.rend_es_total.map(m => esc(m.variedad)).join(' y ') +
+            ' esa celda trae los <b>kilos totales</b> de la temporada y no los kilos por hectárea. ' +
+            'El modelo la multiplica por la superficie, así que la temporada 2025-2026 queda multiplicada por las hectáreas: ' +
+            cos.rend_es_total.map(m => esc(m.variedad) + ' marca ' + miles(m.celda) +
+                ' kg/ha donde la cosecha real da ' + miles(m.rendimiento_real)).join('; ') + '. ' +
+            'Son unos <b>' + usd(exceso) + '</b> de ingresos de más en 2025-2026. ' +
+            'El mapa no lo corrige: muestra el libro tal cual, y la cosecha real está en ' +
+            '<i>Producción ▸ Cosecha real</i>.</div>');
+    }
+    if (cos.difieren_de_ficha && cos.difieren_de_ficha.length) {
+        partes.push('<div class="mp-aviso"><b>Dos fuentes para las mismas temporadas.</b> ' +
+            'La hoja <i>Fuente 2 Rendimientos</i> y la <i>Ficha Técnica</i> —que es la que alimenta el modelo— ' +
+            'coinciden exactamente en 2025-2026, pero no en 2023-2024 ni en 2024-2025: difieren en ' +
+            cos.difieren_de_ficha.length + ' de ' + MOD.variedades.length + ' variedades, algunas por mucho ' +
+            '(Lapins 24/25: 109.950 kg según la Ficha, 406.772 según Fuente 2). ' +
+            '<i>Cosecha real</i> muestra Fuente 2, que es la hoja cuyas hectáreas suman las 292,23 ha del modelo.</div>');
+    }
+    if (cos.agrupadas && cos.agrupadas.length) {
+        partes.push('<div class="mp-aviso"><b>Medidas juntas.</b> Fuente 2 lleva en una sola fila ' +
+            'Santina con Santina Macro Túnel, y Cara Cara con Fukumoto. Las dos de cada par reciben el ' +
+            'rendimiento del conjunto —que es lo que se midió— y los kilos se reparten por superficie para ' +
+            'que los totales no cuenten nada dos veces. Van marcadas con * en la tabla.</div>');
+    }
     if (av.produccion_incoherente && av.produccion_incoherente.length) {
         partes.push('<div class="mp-aviso"><b>Revisar el libro.</b> En la hoja <i>Consolidado por variedad</i>, el bloque PRODUCCIÓN trae corridas una fila las cuatro variedades de Uva Vinífera, y la última carga el total de la especie. ' +
-            'Ingresos, costos y EBITDA están correctos —cuadran con ha × rendimiento de <i>Inputs Generales</i>—, así que la plata no está afectada. ' +
+            'Ese corrimiento en particular no mueve la plata: ingresos, costos y EBITDA cuadran con ha × rendimiento de <i>Inputs Generales</i>. ' +
+            'Lo que sí la mueve es la celda de rendimiento 25/26 de esas mismas variedades, que es el aviso de más arriba. ' +
             'El mapa despeja la producción desde los ingresos para estas cuatro: ' + av.produccion_incoherente.map(x => esc(x.split(' / ')[1])).join(', ') + '.</div>');
     }
     if (av.variedades_sin_cuartel && av.variedades_sin_cuartel.length) {
@@ -2057,6 +2220,34 @@ const lineaCero = {
         ctx.restore();
     }
 };
+
+/* Línea horizontal de referencia con su rótulo. La usa la cosecha real para
+   marcar dónde está la plena producción del modelo: sin ella, las barras dicen
+   cuánto se cosechó pero no contra qué. */
+const lineaMeta = (valor, rotulo) => ({
+    id: 'lineaMeta',
+    afterDatasetsDraw(ch) {
+        if (valor == null || !isFinite(valor)) return;
+        const y = ch.scales.y.getPixelForValue(valor);
+        const { ctx, chartArea } = ch;
+        if (y < chartArea.top || y > chartArea.bottom) return;
+        ctx.save();
+        ctx.strokeStyle = css('--sem-ink');
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, y);
+        ctx.lineTo(chartArea.right, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '600 9px "Fira Sans", sans-serif';
+        ctx.fillStyle = css('--sem-ink');
+        ctx.textAlign = 'right';
+        ctx.textBaseline = y - chartArea.top < 12 ? 'top' : 'bottom';
+        ctx.fillText(rotulo, chartArea.right - 2, y - 2);
+        ctx.restore();
+    }
+});
 
 function rangoY(valores) {
     const v = valores.filter(x => x != null && isFinite(x));
@@ -2145,6 +2336,10 @@ function dibujarGrafico(regs) {
     const cv = $('chart');
     if (grafico) { grafico.destroy(); grafico = null; }
     const alto = n => Math.max(180, n * 22 + 46) + 'px';
+    // Van acá arriba y no junto al primer gráfico que los usa: declarados más
+    // abajo, cualquier rama anterior que los tocara caía en zona muerta.
+    const { base, tick } = ejes();
+    const comun = COMUN_CHART();
 
     if (modo === 'general') {
         const datos = porEspecieVisible();
@@ -2192,10 +2387,62 @@ function dibujarGrafico(regs) {
         return;
     }
 
+    if (verCosecha()) {
+        const regsCos = regs.filter(v => v.cosecha);
+        if (vistaGrafico === 'serie') {
+            // Toneladas cosechadas por temporada, con la línea de lo que el
+            // modelo pide en plena producción como referencia: la distancia
+            // entre las barras y la línea es todo lo que hay que mirar acá.
+            const idx = MOD.cosechas.temporadas.map((_, i) => i);
+            const ton = i => regsCos.reduce((a, v) => a + (v.cosecha.kg[i] || 0), 0) / 1000;
+            const meta = agregado(regs, UTILES - 1).kg / 1000;
+            cv.parentElement.style.height = '236px';
+            const datos = idx.map(ton);
+            const r = rangoY(datos.concat([meta]));
+            grafico = new Chart(cv, {
+                type: 'bar',
+                data: {
+                    labels: MOD.cosechas.temporadas.map(x => x.replace('-', '/')),
+                    datasets: [{ data: datos, backgroundColor: VIZ.s1, borderRadius: 3,
+                                 borderSkipped: false, categoryPercentage: 0.66, barPercentage: 0.9 }]
+                },
+                options: {
+                    ...comun,
+                    plugins: {
+                        ...comun.plugins,
+                        tooltip: { ...comun.plugins.tooltip, callbacks: {
+                            title: it => MOD.cosechas.temporadas[it[0].dataIndex],
+                            label: it => nf(it.raw, 0) + ' t cosechadas  ·  ' + pct(it.raw / meta) + ' de la plena producción'
+                        } }
+                    },
+                    scales: {
+                        x: { ...base, grid: { display: false }, ticks: { ...tick, maxRotation: 0, minRotation: 0 } },
+                        y: { ...base, min: r.min, max: r.max,
+                             ticks: { ...tick, stepSize: r.paso, callback: v => nf(v, 0) + ' t' } }
+                    }
+                },
+                plugins: [lineaMeta(meta, 'Plena producción del modelo')]
+            });
+            $('chartNota').textContent = 'Toneladas efectivamente cosechadas, de la hoja «Fuente 2 Rendimientos». ' +
+                'La línea es lo que el modelo asume en plena producción: ' + miles(meta) + ' t.';
+            return;
+        }
+        const filas = regsCos.filter(v => v.cosecha.rend_kg_ha[tc] != null)
+            .sort((a, b) => a.cosecha.rend_kg_ha[tc] - b.cosecha.rend_kg_ha[tc]);
+        cv.parentElement.style.height = alto(filas.length * 0.73);
+        grafico = barrasHorizontales(cv, filas.map(v => ({
+            nombre: v.variedad,
+            valor: v.cosecha.rend_kg_ha[tc],
+            color: colorEscala(v.cosecha.rend_kg_ha[tc], ESCALAS.rend_kg_ha),
+            nota: nf(v.ha, 1) + ' ha'
+        })), v => miles(v), 'kg/ha cosechados');
+        $('chartNota').textContent = 'Rendimiento cosechado en ' + MOD.cosechas.temporadas[tc] +
+            '. Mismos cortes y colores que el mapa y que la producción proyectada, para poder compararlas.';
+        return;
+    }
+
     // Producción y Financiero: dos vistas, por temporada y por variedad.
-    const { base, tick } = ejes();
     const produccion = modo === 'produccion';
-    const comun = COMUN_CHART();
     const barra = { borderRadius: 3, borderSkipped: false, categoryPercentage: 0.7, barPercentage: 0.9 };
 
     if (vistaGrafico === 'serie') {
@@ -2305,8 +2552,14 @@ function dibujarGrafico(regs) {
 
 /* ── Selectores y modos ─────────────────────────────────────────────────── */
 function construirSelectores() {
-    $('selTemporada').innerHTML = MOD.temporadas.slice(0, UTILES).map((s, i) =>
-        `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === UTILES - 1 ? ' · plena producción' : ''}</option>`).join('');
+    // Dos ejes de tiempo: el del modelo y el de las cosechas registradas. El
+    // selector muestra el que corresponde al modo, con su propio índice.
+    $('selTemporada').innerHTML = verCosecha()
+        ? MOD.cosechas.temporadas.map((s, i) =>
+            `<option value="${i}"${i === tc ? ' selected' : ''}>${esc(s)}${
+                MOD.cosechas.kg[i] ? '' : ' · sin registro'}</option>`).join('')
+        : MOD.temporadas.slice(0, UTILES).map((s, i) =>
+            `<option value="${i}"${i === t ? ' selected' : ''}>${esc(s)}${i === UTILES - 1 ? ' · plena producción' : ''}</option>`).join('');
     $('selMetrica').innerHTML = METRICAS_FIN.map(g =>
         `<optgroup label="${esc(g.grupo)}">` + g.campos.map(m =>
             `<option value="${m}"${m === metrica ? ' selected' : ''}>${esc(ESCALAS[m].etiqueta)}</option>`
@@ -2350,6 +2603,7 @@ function sincronizarControles() {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
     document.body.classList.toggle('modo-dato', modo !== 'general');
     $('grpColor').hidden = modo !== 'general';
+    $('grpSubProd').hidden = modo !== 'produccion';
     $('grpMetrica').hidden = modo !== 'financiero';
     $('grpSubSuelo').hidden = modo !== 'suelos';
     $('grpSuelo').hidden = modo !== 'suelos';
@@ -2377,6 +2631,15 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 $('selColor').addEventListener('change', e => { modoColor = e.target.value; repintar(); });
 $('selMetrica').addEventListener('change', e => { metrica = e.target.value; repintar(); });
 $('selSuelo').addEventListener('change', e => { metricaSuelo = e.target.value; repintar(); });
+$('segProd').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    subProd = b.dataset.sub;
+    $('segProd').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
+    // El selector de temporada cambia de eje entero, así que se reconstruye.
+    construirSelectores();
+    if (fijado) desfijar();
+    repintar();
+}));
+$('selTemporada').addEventListener('change', e => { if (verCosecha()) { tc = +e.target.value; repintar(); if (fijado) desfijar(); } });
 $('segSuelo').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     subSuelo = b.dataset.sub;
     // Cada cara arranca en su primera variable: dejar seleccionada una del otro
@@ -2386,7 +2649,7 @@ $('segSuelo').querySelectorAll('button').forEach(b => b.addEventListener('click'
     construirSelectores();
     repintar();
 }));
-$('selTemporada').addEventListener('change', e => { t = +e.target.value; repintar(); if (fijado) desfijar(); });
+$('selTemporada').addEventListener('change', e => { if (!verCosecha()) { t = +e.target.value; repintar(); if (fijado) desfijar(); } });
 $('btnPanel').addEventListener('click', () => togglePanel(!panelAbierto()));
 $('panelAsa').addEventListener('click', () => togglePanel(true));
 $('mpCerrar').addEventListener('click', () => togglePanel(false));
