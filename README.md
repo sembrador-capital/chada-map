@@ -12,7 +12,7 @@ capas de terreno y suelo viven dentro de `geo_data.json`.
 
 ---
 
-## La superficie: 311,65 → 301,47 → 292,23 ha
+## La superficie: 311,65 → 292,23 → 284,02 ha
 
 Los tres números que explican el predio, y el puente entre ellos:
 
@@ -22,9 +22,11 @@ Los tres números que explican el predio, y el puente entre ellos:
 | − Clemenules (no productivo) | −10,18 | Plantado en 1999, fuera de producción |
 | **Superficie plantada** | **301,47** | |
 | − Vinífera arrancada | −9,24 | Cabernet Sauvignon y Cabernet Franc |
-| **Superficie productiva modelada** | **292,23** | Base de todo el modelo financiero |
+| **Superficie productiva del predio** | **292,23** | |
+| − Cuarteles arrendados | −8,21 | 5174 (Candy Hearts) y 5133 (Sweet Celebration) |
+| **Superficie productiva modelada** | **284,02** | Base de todo el modelo financiero |
 
-**292,23 ha es la superficie de referencia de todo el mapa.** El KMZ no aporta
+**284,02 ha es la superficie de referencia de todo el mapa.** El KMZ no aporta
 hectáreas y el código no las calcula: un contorno dibujado a mano no es una
 medición, y mezclarlo con la tasación haría que los totales del mapa y los del
 modelo no cuadren. El KMZ aporta geometría e identidad de cuartel; el modelo
@@ -33,7 +35,16 @@ aporta las hectáreas y la plata.
 El KMZ sí dibuja los siete cuarteles que el modelo excluye —los arranques de
 vinífera y el paño de Clemenules—, agrupados como `Disponible`. Se pintan en
 gris y la ficha dice por qué no tienen contraparte: son parte de las 311,65 ha
-de tasación, no de las 292,23 modeladas.
+de tasación, no de las 284,02 modeladas.
+
+**Dos cuarteles están arrendados a terceros** —el 5174 (Candy Hearts, 3,80 ha) y
+el 5133 (Sweet Celebration, 4,41 ha)—. El negocio no los explota, así que desde
+v6 el modelo dejó de contar su superficie: es el último escalón, de 292,23 a
+284,02 ha. En el mapa van en su propia rama gris, `Arrendado`, aparte de
+`Disponible`, y no entran en ningún total ni en el filtro de EBITDA. El KMZ los
+sigue dibujando con su variedad —la ficha la nombra— pero pintados en gris para
+que se vea que están fuera del análisis. Se configuran en la tabla `ARRENDADOS`
+de `tools/modelo_to_json.py`: si cambia qué se arrienda, se edita solo eso.
 
 ---
 
@@ -180,7 +191,7 @@ campo la superó.
 Dos detalles de la fuente, ambos visibles en el mapa:
 
 - Las hectáreas del denominador son las que **tenían cosecha registrada** esa
-  temporada, no las 292,23 del predio. En 2023/24 buena parte del campo todavía
+  temporada, no la superficie total del predio. En 2023/24 buena parte del campo todavía
   no entraba en producción (271,28 ha), y dividir por el total daría un
   rendimiento que no es el de ningún cuartel.
 - Fuente 2 lleva en una sola fila **Santina con Santina Macro Túnel** y **Cara
@@ -197,9 +208,14 @@ Dos detalles de la fuente, ambos visibles en el mapa:
 ### Un solo modelo, con lugar para más
 
 Producción y Financiero muestran **la última versión del modelo financiero**
-(`Financial_Model_Hacienda_Chada_v4.xlsx`). En plena producción (2028-2029) deja
-un EBITDA de **+US$ 111.833** sobre ingresos de US$ 6,23 M y costos de US$ 5,77 M
-—la versión anterior (v3) cerraba en −US$ 93.775—.
+(`Financial_Model_Hacienda_Chada_v6.xlsx`). En plena producción (2028-2029) deja
+un EBITDA de **+US$ 916.776** sobre ingresos de US$ 6,81 M y costos de US$ 5,55 M.
+El EBITDA total casi no se movió desde v5 (+US$ 915.146) —los dos cuarteles que
+v6 saca por arriendo eran chicos y de margen parejo—, pero la superficie
+modelada bajó de 292,23 a 284,02 ha. El salto grande de rentabilidad había sido
+antes: v3 cerraba en −US$ 93.775, v4 en +US$ 111.833, y v4→v5 sumó casi todo el
+EBITDA (ingresos +12,5% con costos planos) por el precio de exportación
+escalonado —ver el hallazgo más abajo—.
 
 La maquinaria para comparar dos modelos lado a lado sigue en pie pero apagada:
 la lista `ESCENARIOS` de `tools/modelo_to_json.py` tiene una sola entrada, y el
@@ -211,17 +227,16 @@ archivo de salida y nota— y correr el script; `index.html` no se toca.
 
 Financiero y Producción traen un filtro por signo del EBITDA: **Todas ·
 EBITDA + · EBITDA −**. En plena producción (2028-2029) las variedades con
-EBITDA/ha positivo suman **186,83 ha de las 292,23**, el 64% del predio,
-repartidas en 57 de los 174 paños. El resto —105,40 ha— pierde plata. Las dos
+EBITDA/ha positivo suman **193,47 ha de las 284,02**, el 68% del predio,
+repartidas en 59 de los 174 paños. El resto —90,55 ha— pierde plata. Las dos
 mitades suman exactamente el predio, que es la comprobación de que nada se
 pierde ni se cuenta dos veces.
 
 El signo cambia con la temporada, así que el filtro se vuelve a evaluar al
-cambiarla: 68,03 ha en 2025-2026, 122,78 en 2026-2027, 124,36 en 2027-2028 y
-186,83 de ahí en adelante. El salto entre 2027-2028 y 2028-2029 —de 124 a 187
-ha— es la versión en superficie del mismo cambio que muestra la tabla de
-arriba: v4 destraba varias variedades que en el modelo anterior no llegaban a
-ser rentables ni en su mejor temporada.
+cambiarla: 68,03 ha en 2025-2026, 141,51 en 2026-2027, **190,23** en 2027-2028 y
+193,47 de ahí en adelante. El salto de 2026-2027 a 2027-2028 —de 142 a 190 ha—
+es el precio de exportación escalonado que el modelo aplica a la Uva de Mesa
+desde 2027-2028: varias variedades cruzan a rentables ahí.
 
 **El filtro es por variedad del modelo, no por rama de la leyenda.** Es la
 diferencia entre que el total cuadre y que no: el número que se quiere
@@ -246,14 +261,12 @@ ellos.
 El control está en **Financiero y en Producción** —las dos pestañas donde la
 pregunta tiene sentido— y lo que deja puesto vale en todas: filtrar y pasar a
 Suelos muestra qué suelo tienen justamente los paños que ganan plata. El cruce
-más útil es con *Cosecha real*: las 186,8 ha rentables cosecharon 17.476 kg/ha
-en 2025/26 contra los 24.561 que el modelo les pide en plena producción, un
-**71,2%** —prácticamente lo mismo que el 71,9% del predio completo—. Con v3, las
+más útil es con *Cosecha real*: las 193,5 ha rentables cosecharon 17.330 kg/ha
+en 2025/26 contra los 24.258 que el modelo les pide en plena producción, un
+**71,4%** —prácticamente lo mismo que el 72,9% del predio completo—. Con v3, las
 130,5 ha rentables de entonces estaban bastante más cerca de su meta que el
-predio (82,7% contra 71,9%); con v4 esa ventaja desaparece, porque el conjunto
-de variedades rentables se ensanchó y ya no es sólo el núcleo más eficiente. Los
-paños que ganan plata
-son también los que están más cerca de su meta.
+predio (82,7% contra 71,9%); desde v4 esa ventaja desaparece, porque el conjunto
+de variedades rentables se ensanchó y ya no es sólo el núcleo más eficiente.
 
 El filtro mira **siempre el EBITDA del modelo**, no el de la temporada
 cosechada: en *Cosecha real* el selector de temporada muestra otro eje de
@@ -276,7 +289,7 @@ gris, para que se vea que son dos cosas.
 `ha_kmz` es lo **único** que el mapa deriva del contorno del KMZ, y **no entra en
 ningún cálculo**: ni en totales, ni en promedios ponderados, ni en escalas de
 color, ni en repartos. La razón está a la vista: sumar los 174 paños da
-**330,81 ha** contra las 292,23 del modelo. Un contorno dibujado a mano no es
+**330,81 ha** contra las 284,02 del modelo. Un contorno dibujado a mano no es
 una medición, y mezclarlo con la tasación descuadraría todo.
 
 ### Cajas o kilos, según lo que se esté mirando
@@ -346,8 +359,8 @@ eso, un filtro puesto sin querer sólo se manifiesta como un total que no cuadra
 
 Las hectáreas de la tabla del panel salen de las mismas ramas encendidas que la
 barra de métricas. Contarlas desde los polígonos dejaba fuera las 3,4 ha de las
-dos variedades sin paño dibujado, y la misma pantalla mostraba 288,83 arriba y
-292,23 al lado.
+dos variedades sin paño dibujado, y la misma pantalla mostraba 280,62 arriba y
+284,02 al lado.
 
 Los dos JSON se piden con `cache: 'no-cache'`. La respuesta sigue siendo un 304
 barato mientras el archivo no cambie, pero sin eso el navegador servía los datos
@@ -459,9 +472,35 @@ encuadraba contra un ancho que en pantalla no existe y dejaba el tercio oriente
 Cuatro cosas que el cruce dejó a la vista. Ninguna se corrige en silencio: todas
 salen en el panel y, donde corresponde, en la ficha del cuartel.
 
-**Los dos primeros ya están corregidos en el libro v3.** Se dejan escritos
-porque el control que los detectó sigue corriendo en cada actualización, y
-porque explican por qué existe.
+**Los dos primeros ya están corregidos en el libro v3, y el tercero es de v5.**
+Se dejan escritos porque los controles que los detectaron siguen corriendo en
+cada actualización, y porque explican por qué existen.
+
+**0d. v5 agregó una columna en medio de la tabla de supuestos, y el script la
+seguía a ciegas por posición.** `Inputs Generales` inserta *Precio exportación
+27-28→* entre el precio de exportación y el precio de mercado interno, corriendo
+doce columnas un lugar —costo fijo, costo de cosecha, GAV, todo lo que venía
+después—. El lector validaba cada columna contra su encabezado y por eso frenó
+solo, con el mensaje puesto para eso: *"La columna O... dice 'Precio
+exportación 27-28→'... parece que se insertaron o movieron columnas"*. Sin esa
+guarda habría leído el costo de cosecha donde estaba el costo fijo, y ningún
+número se habría visto raro —cada columna corrida seguía siendo un número del
+mismo orden de magnitud que la de al lado—.
+
+Se resolvió en dos partes. Primero, el lector de esa tabla dejó de fijarse solo
+en la letra de columna: si el encabezado esperado no está ahí, busca en las
+columnas vecinas antes de rendirse, así que una columna insertada o borrada no
+vuelve a parar el script. Segundo, el precio nuevo es real —Uva de Mesa cobra
+más por kilo de exportación desde 2027-2028— y hay que usarlo: el chequeo de
+coherencia de producción ahora compara cada temporada contra el precio que le
+corresponde (el de antes del corte o el de después), no contra un precio único
+para las 21 temporadas. Sin este segundo paso, 11 variedades de Uva de Mesa
+habrían salido "incoherentes" desde 2027-2028 en adelante —19 de 21
+temporadas— y su producción real se habría reemplazado por una despejada de un
+precio que dejó de regir, el mismo error que ya se había cometido y corregido
+con v3. El corte de temporada no está escrito a mano: se lee del propio
+encabezado («27-28» ⟶ busca "2027-2028" en la lista de temporadas), así que si
+el corte se mueve a otro año el script lo sigue sin que haya que tocarlo.
 
 **0. La celda de rendimiento 25/26 de la vinífera traía un total, no un
 rendimiento** *(resuelto en v3)*. En `Inputs Generales`, la columna *Rendimiento 25/26* de Cabernet
@@ -490,7 +529,7 @@ la Ficha Técnica —que es la que alimenta `Base Chada` y, por ahí, el modelo�
 coinciden **exactamente** en 2025/26, en las 33 variedades. En 2023/24 y 2024/25
 difieren en 19 de 33, algunas por mucho: Lapins 24/25 da 109.950 kg según la
 Ficha y 406.772 según Fuente 2. El mapa pinta Fuente 2, que es la hoja cuyas
-hectáreas suman las 292,23 ha del modelo (la Ficha suma 301,01: es anterior al
+hectáreas suman las 292,23 ha que el predio operaba antes de arrendar (la Ficha suma 301,01: es anterior al
 arranque de la vinífera). La coincidencia exacta en 25/26 es además lo que
 confirma que las temporadas quedaron alineadas y no corridas un año, porque cada
 bloque de la hoja rotula distinto —la cereza por el año en que se cosecha, la uva
@@ -513,7 +552,7 @@ usa la serie despejada. Las otras 29 variedades calzan dentro del 2%.
 **2. Dos variedades del modelo no tienen polígono en el KMZ:** `Red Globe`
 (2,94 ha) y `Lapins Injerto` (0,46 ha). Aparecen igual en el árbol de la leyenda,
 en cursiva y con el punto hueco, y suman en los totales: por eso el mapa
-encendido entero dice 292,23 ha y no 288,83. Lo que no pueden es pintarse, porque
+encendido entero dice 284,02 ha y no 280,62. Lo que no pueden es pintarse, porque
 no hay polígono que pintar; al hacerles clic en la tabla el mapa lo dice en vez
 de quedarse quieto. Si aparecen en una versión futura del KMZ, se cruzan solas
 por el nombre.
@@ -554,12 +593,12 @@ en el nombre. El procedimiento son tres pasos.
 
 ```bash
 # 1. dejar el libro nuevo en datos_fuente/, con su propio nombre versionado
-cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v5.xlsx
+cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v6.xlsx
 ```
 
 ```python
 # 2. apuntar ESCENARIOS al archivo nuevo, en tools/modelo_to_json.py
-{"id": "v5", "nombre": "v5", "libro": "Financial_Model_Hacienda_Chada_v5.xlsx",
+{"id": "v6", "nombre": "v6", "libro": "Financial_Model_Hacienda_Chada_v6.xlsx",
  "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ```
 
@@ -578,7 +617,7 @@ archivo y los rótulos viven en la lista `ESCENARIOS`, al principio de
 
 ```python
 ESCENARIOS = [
-    {"id": "v4", "nombre": "v4", "libro": "Financial_Model_Hacienda_Chada_v4.xlsx",
+    {"id": "v6", "nombre": "v6", "libro": "Financial_Model_Hacienda_Chada_v6.xlsx",
      "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ]
 ```

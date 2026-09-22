@@ -810,10 +810,10 @@ body.panel-abierto .data-stamp { right:408px; }
      modelo_data.json  superficie, producción, ingresos, costos y EBITDA
                        (derivado del modelo financiero)
 
-   La superficie SIEMPRE es la del modelo: 292,23 ha productivas. Ningún total,
+   La superficie SIEMPRE es la del modelo: 284,02 ha productivas. Ningún total,
    promedio ponderado, escala ni reparto usa el área del polígono: un contorno
    dibujado a mano no es una medición, y sumar los 174 paños da 330,81 ha contra
-   las 292,23 del modelo.
+   las 284,02 del modelo.
 
    La única excepción es de lectura, no de cálculo. La ficha del cuartel muestra
    'ha_kmz' —el área dibujada de ESE paño— debajo de la del modelo, porque la
@@ -1268,8 +1268,8 @@ function prepararPaletas() {
     });
 
     // Red Globe y Lapins Injerto están en el modelo y no tienen polígono en el
-    // KMZ. Si se dejan fuera del árbol, el mapa encendido entero suma 288,83 ha
-    // y no las 292,23 del modelo, y ese descuadre no se explica en ninguna
+    // KMZ. Si se dejan fuera del árbol, el mapa encendido entero suma 280,62 ha
+    // y no las 284,02 del modelo, y ese descuadre no se explica en ninguna
     // parte. Entran como rama propia, marcadas: cuentan en los totales y no
     // pintan nada porque no hay qué pintar.
     MOD.variedades.forEach(v => {
@@ -1617,7 +1617,7 @@ function mostrarFicha(p, punto, fija = false) {
     /* Las hectáreas dibujadas de ESTE paño. Van siempre, haya o no contraparte
        en el modelo: es lo único que describe al polígono que se está tocando.
        Es una medición del dibujo del KMZ y no entra en ningún total -la suma de
-       los 174 paños da 330,81 ha contra las 292,23 del modelo-, así que va
+       los 174 paños da 330,81 ha contra las 284,02 del modelo-, así que va
        rotulada como lo que es y en gris, para que nadie la confunda con la
        superficie que manda. */
     const kvKmz = p => p.ha_kmz == null ? ''
@@ -1644,7 +1644,8 @@ function mostrarFicha(p, punto, fija = false) {
             (variedades.length > 1
                 ? sec('Variedades del cuartel', variedades.map((v, i) => chip(esc(v), esc(cuarteles[i] || '—'))).join(''))
                 : '');
-        if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
+        if (p.arrendado) avisos.push('Cuartel <b>arrendado a terceros</b>: no entra en el análisis. El modelo dejó de contar su superficie; el KMZ lo dibuja plantado con ' + esc(p.variedad) + '.');
+        else if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
         if (p.aprox) avisos.push('Cruce aproximado: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
 
         // En los demás modos el titular es otro -rendimiento, plata, suelo- y la
@@ -1714,7 +1715,8 @@ function mostrarFicha(p, punto, fija = false) {
               (regs.length > 1 ? sec('Por variedad', regs.map(v =>
                   chip(esc(v.variedad), f(v[campo.c][t]))).join('')) : '')
             : '');
-        if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
+        if (p.arrendado) avisos.push('Cuartel <b>arrendado a terceros</b>: no entra en el análisis. El modelo dejó de contar su superficie; el KMZ lo dibuja plantado con ' + esc(p.variedad) + '.');
+        else if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
         if (mezclaSignos(p)) {
             const dentro = regs.filter(v => clavesRent.has(vkey(v.especie, v.variedad))).map(v => v.variedad);
             const fuera = regs.filter(v => !clavesRent.has(vkey(v.especie, v.variedad))).map(v => v.variedad);
@@ -2230,7 +2232,7 @@ function porEspecieVisible() {
     });
     // Las hectáreas salen de las ramas encendidas, incluidas las que el modelo
     // tiene y el KMZ no dibuja. Contarlas desde los polígonos dejaba fuera esas
-    // 3,4 ha y la tabla sumaba 288,83 mientras la barra decía 292,23.
+    // 3,4 ha y la tabla sumaba 280,62 mientras la barra decía 284,02.
     visibles.forEach(k => (MODELOS_DE_VKEY[k] || []).forEach(m =>
         nuevo(k.slice(0, k.indexOf('|'))).claves.add(m)));
     // Los cuarteles, la pendiente y el suelo sí son del polígono: son lo que se
@@ -2506,11 +2508,18 @@ function pintarConciliacion() {
         const clase = r.ha < 0 ? 'resta' : (i === c.length - 1 ? 'total' : '');
         return `<tr class="${clase}"><td>${esc(r.concepto)}<br><span style="color:var(--sem-text-3);font-size:9.5px">${esc(r.nota)}</span></td><td>${nf(r.ha, 2)} ha</td></tr>`;
     }).join('');
-    $('concNota').innerHTML = 'Las 292,23 ha son la base de todo el modelo. Ningún cálculo del mapa usa la superficie del polígono del KMZ —la ficha la muestra, rotulada, sólo para que se vea cuánto mide el paño que se está tocando—: ' +
+    $('concNota').innerHTML = 'Las 284,02 ha son la base de todo el modelo. Ningún cálculo del mapa usa la superficie del polígono del KMZ —la ficha la muestra, rotulada, sólo para que se vea cuánto mide el paño que se está tocando—: ' +
         'un contorno dibujado no es una medición, y mezclarlo con la tasación descuadraría los totales.';
 
     const av = MOD.avisos, partes = [];
     const cos = av.cosecha || {};
+
+    if (av.arrendados && av.arrendados.length) {
+        partes.push('<div class="mp-aviso"><b>Cuarteles arrendados, fuera del análisis.</b> ' +
+            av.arrendados.map(esc).join(' y ') + ' están arrendados a terceros. El modelo dejó de contar su ' +
+            'superficie —de 292,23 a 284,02 ha— y en el mapa van en gris, en su propia rama <i>Arrendado</i>, ' +
+            'sin entrar en ningún total ni en el filtro de EBITDA.</div>');
+    }
 
     // El más caro primero: una celda mal puesta que infla una temporada entera.
     if (cos.rend_es_total && cos.rend_es_total.length) {
@@ -2531,7 +2540,9 @@ function pintarConciliacion() {
             'coinciden exactamente en 2025-2026, pero no en 2023-2024 ni en 2024-2025: difieren en ' +
             cos.difieren_de_ficha.length + ' de ' + MOD.variedades.length + ' variedades, algunas por mucho ' +
             '(Lapins 24/25: 109.950 kg según la Ficha, 406.772 según Fuente 2). ' +
-            '<i>Cosecha real</i> muestra Fuente 2, que es la hoja cuyas hectáreas suman las 292,23 ha del modelo.</div>');
+            '<i>Cosecha real</i> muestra Fuente 2, cuyas hectáreas suman la superficie que se operó históricamente ' +
+            '—292,23 ha—, algo más que las 284,02 que hoy modela el negocio, porque la cosecha incluye los dos ' +
+            'cuarteles que hoy están arrendados.</div>');
     }
     if (cos.agrupadas && cos.agrupadas.length) {
         const porSup = cos.repartidas_por_superficie || [];

@@ -49,8 +49,8 @@ LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 # El mapa lee esta misma lista desde los JSON generados, asi que no hay que
 # tocar index.html.
 ESCENARIOS = [
-    {"id": "v4", "nombre": "v4",
-     "libro": "Financial_Model_Hacienda_Chada_v4.xlsx",
+    {"id": "v6", "nombre": "v6",
+     "libro": "Financial_Model_Hacienda_Chada_v6.xlsx",
      "salida": "modelo_data.json",
      # La nota es texto de pantalla, no comentario: va con tildes como todo lo
      # que termina a la vista del usuario.
@@ -124,8 +124,21 @@ ALIAS = {
 CRUCE_APROXIMADO = {("cerezos", "cheery moon", None)}
 
 # El KMZ agrupa como "Disponible" lo arrancado y lo no productivo. El modelo no
-# lo incluye a proposito: es justamente el puente de 311,65 ha a 292,23 ha.
+# lo incluye a proposito: es parte del puente de 311,65 ha a 284,02 ha.
 ESPECIE_SIN_MODELO = "Disponible"
+
+# Cuarteles arrendados a terceros. El negocio no los explota, asi que el modelo
+# v6 dejo de contar su superficie (de 292,23 a 284,02 ha). En el mapa van
+# aparte, en gris y con su propia rama, igual que "Disponible", y no entran en
+# ningun agregado ni en el filtro de EBITDA. La ha de cada uno es la que el
+# modelo dejo de contar al sacarlo -Candy Hearts perdio 3,80 ha y Sweet
+# Celebration 4,41-, y su suma (8,21) es el ultimo escalon de la conciliacion.
+# Si aparecen o se van cuarteles arrendados, se edita solo esta tabla.
+ESPECIE_ARRENDADO = "Arrendado"
+ARRENDADOS = {
+    "5174": {"variedad": "Candy Hearts", "ha": 3.80},
+    "5133": {"variedad": "Sweet Celebration", "ha": 4.41},
+}
 
 ESPECIE_KMZ_A_MODELO = {
     "cerezos": "Cerezas",
@@ -330,6 +343,26 @@ CAMPOS_VARIEDAD = [
 ]
 
 
+# Busca la columna cuyo encabezado trae 'objetivo', partiendo de la letra
+# esperada y ampliando hacia los lados si ahi no calza. Una columna insertada o
+# borrada cerca corre el resto del bloque un lugar sin reordenarlo -es
+# exactamente lo que paso en v5, que metio "Precio exportacion 27-28" entre el
+# precio de exportacion y el precio interno y corrio doce columnas una casilla-,
+# y una ventana chica lo sigue sin adivinar mas alla. Si nada calza ni cerca,
+# no hay ambiguedad que resolver: se avisa y se para.
+def col_con_encabezado(cabecera, idx, letra_base, objetivo, ventana=4):
+    base = idx(letra_base)
+    buscado = norm(objetivo)
+    deltas = [0] + [d for paso in range(1, ventana + 1) for d in (paso, -paso)]
+    for delta in deltas:
+        i = base + delta
+        if 0 <= i < len(cabecera):
+            texto = norm(" ".join(str(cabecera[i] or "").split()))
+            if buscado in texto:
+                return i
+    return None
+
+
 def leer_inputs(ws):
     filas = list(ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=43, values_only=True))
     idx = lambda letra: openpyxl.utils.column_index_from_string(letra) - 1
@@ -357,13 +390,34 @@ def leer_inputs(ws):
     exigir(i_cab, "la cabecera Especie / Variedad", "Inputs Generales, seccion 4")
 
     cabecera = filas[i_cab]
-    for _, letra, _, esperado in CAMPOS_VARIEDAD:
-        texto = norm(" ".join(str(cabecera[idx(letra)] or "").split()))
-        if norm(esperado) not in texto:
+    columnas = {}
+    for nombre, letra, _, esperado in CAMPOS_VARIEDAD:
+        i = col_con_encabezado(cabecera, idx, letra, esperado)
+        if i is None:
             sys.exit(
-                "La columna %s de la tabla de supuestos dice '%s' y se esperaba '%s'.\n"
-                "Parece que se insertaron o movieron columnas: revisa la hoja antes de seguir."
-                % (letra, cabecera[idx(letra)], esperado))
+                "No encuentro la columna de '%s' (se esperaba en %s o cerca) en la\n"
+                "tabla de supuestos de Inputs Generales. En %s dice '%s'.\n"
+                "Parece que se insertaron o borraron mas columnas de las que este\n"
+                "script sabe seguir: revisa la hoja antes de seguir."
+                % (esperado, letra, letra, cabecera[idx(letra)]))
+        columnas[nombre] = i
+
+    # Precio de exportacion con corte de temporada, agregado en v5: rige desde
+    # una temporada en adelante y antes de esa temporada sigue el precio de
+    # siempre. Es OPCIONAL -las versiones anteriores del libro no lo traen, y
+    # una version futura podria volver a sacarlo- y se identifica por traer un
+    # rango de dos anos en el encabezado (hoy "27-28"), no por su posicion: el
+    # propio rango dice desde que temporada aplica, asi que si el corte se
+    # mueve a otro ano el script lo sigue sin que haya que tocarlo.
+    col_tardio = col_con_encabezado(cabecera, idx, "O", "exportacion")
+    corte_tardio = None
+    if col_tardio is not None:
+        texto_tardio = str(cabecera[col_tardio] or "")
+        m = re.search(r"(\d{2})\s*-\s*(\d{2})", texto_tardio)
+        if m:
+            corte_tardio = "20%s-20%s" % (m.group(1), m.group(2))
+        else:
+            col_tardio = None  # trae "exportacion" pero no un rango: no es esta columna
 
     por_variedad = {}
     for f in filas[i_cab + 1:]:
@@ -372,10 +426,11 @@ def leer_inputs(ws):
             break                      # la tabla termina en la primera fila sin variedad
         reg = {}
         for nombre, letra, nd, _ in CAMPOS_VARIEDAD:
-            v = f[idx(letra)]
+            v = f[columnas[nombre]]
             reg[nombre] = v if nd is None else num(v, nd)
+        reg["precio_export_tardio"] = num(f[col_tardio], 2) if col_tardio is not None else None
         por_variedad[clave_modelo(especie, variedad)] = reg
-    return supuestos, por_variedad
+    return supuestos, por_variedad, corte_tardio
 
 
 # El modelo separa por manejo e injerto lo que la tasacion anota como una sola
@@ -634,10 +689,17 @@ def cruzar_cosechas(fuente2, variedades):
                 avisos["repartidas_por_superficie"].append(reg["variedad"])
 
         kg = [None if v is None else round(v * cuota[i]) for i, v in enumerate(kg_fila)]
-        # Y el rendimiento es el de la variedad, con SUS hectareas: es lo que
-        # permite que dos cuarteles de la misma fila agrupada se pinten distinto
-        # cuando de verdad rindieron distinto.
-        ha_propia = reg["ha"] or ha_fila
+        # La cosecha se divide por la superficie que la PRODUJO, que es la de la
+        # hoja de rendimientos, no la del modelo. Antes de v6 eran la misma para
+        # las variedades no agrupadas, pero v6 saco de la superficie modelada
+        # dos cuarteles arrendados: Candy Hearts bajo a 12,50 ha y Sweet
+        # Celebration a 18,73, y su cosecha historica -que salio del pano
+        # entero, cuando todavia se operaba- se habria dividido por menos
+        # hectareas de las que la generaron, inflando el rendimiento ~30%. La
+        # cosecha real es un hecho del pasado y se mide contra el area de
+        # entonces. En las agrupadas manda reg["ha"] -el kg ya viene repartido
+        # por variedad, asi que la parte se divide por su propia area-.
+        ha_propia = reg["ha"] if agrupada else (ha_fila or reg["ha"])
         rend = [None if v is None or not ha_propia else round(v / ha_propia) for v in kg]
         # El mismo rendimiento en la unidad del modelo: la uva de mesa se
         # negocia en cajas, no en kilos, y "22.834 kg/ha" no es un numero que
@@ -797,7 +859,16 @@ def procesar(esc, escribir_geo):
     # El largo lo manda el libro, no una constante: si el modelo cambia de
     # horizonte, el JSON lo sigue sin que nadie tenga que tocar el script.
     N_TEMPORADAS = len(temporadas)
-    supuestos, inputs_var = leer_inputs(wb["Inputs Generales"])
+    supuestos, inputs_var, corte_precio_tardio = leer_inputs(wb["Inputs Generales"])
+    # A que indice de temporada corresponde el corte del precio tardio -si el
+    # libro trae uno-. Se busca por el nombre de la temporada, no se calcula a
+    # partir del horizonte: si alguna temporada trae la "E" de estimada al
+    # final (las de mas adelante la tienen) el corte real no la tiene, asi que
+    # se compara sin ese sufijo.
+    idx_corte_tardio = None
+    if corte_precio_tardio:
+        idx_corte_tardio = next(
+            (k for k, t in enumerate(temporadas) if t.rstrip("E") == corte_precio_tardio), None)
     plantaciones, ha_tasacion = leer_plantaciones(wb["Detalle Plantaciones"])
     base = leer_base(wb["Base Chada"])
     fuente2 = leer_fuente2(wb["Fuente 2 Rendimientos"])
@@ -849,15 +920,33 @@ def procesar(esc, escribir_geo):
         # inputs_faltantes, que se avisa al final.
         px = reg.get("pct_export")
         px = px if px is not None else 1
-        precio = (reg.get("precio_export") or 0) * px             + (reg.get("precio_interno_clp") or 0) / supuestos["tipo_cambio"] * (1 - px)
+        interno = (reg.get("precio_interno_clp") or 0) / supuestos["tipo_cambio"]
+        precio = (reg.get("precio_export") or 0) * px + interno * (1 - px)
+        # precio_efectivo queda como el de siempre -el temprano-: es lo unico
+        # que se expone en el diagnostico de consola, y para las variedades sin
+        # precio tardio (todas antes de v5, y las que v5 no le puso el segundo
+        # precio) el comportamiento no cambia en nada.
         reg["precio_efectivo"] = round(precio, 4) if precio else None
-        implicita = [None if not precio else round(i / precio) for i in reg["ingresos"]]
+
+        # El precio con que se compara cada temporada. Si esta variedad tiene
+        # un precio de exportacion tardio, rige desde el indice del corte en
+        # adelante; si no, es el mismo precio en las 21 temporadas, como era
+        # antes de que existiera esta columna.
+        tardio_val = reg.get("precio_export_tardio")
+        if tardio_val is not None and idx_corte_tardio is not None:
+            precio_tardio = tardio_val * px + interno * (1 - px)
+            precios = [precio_tardio if k >= idx_corte_tardio else precio for k in range(N_TEMPORADAS)]
+        else:
+            precios = [precio] * N_TEMPORADAS
+
+        implicita = [None if not precios[k] else round(reg["ingresos"][k] / precios[k])
+                    for k in range(N_TEMPORADAS)]
 
         # Temporadas con con que comparar: hace falta produccion e ingresos.
         comparables = [k for k in range(N_TEMPORADAS)
-                       if precio and reg["produccion"][k] and reg["ingresos"][k]]
+                       if precios[k] and reg["produccion"][k] and reg["ingresos"][k]]
         fuera = [k for k in comparables
-                 if abs(reg["ingresos"][k] / reg["produccion"][k] - precio) > 0.02 * precio]
+                 if abs(reg["ingresos"][k] / reg["produccion"][k] - precios[k]) > 0.02 * precios[k]]
         reg["produccion_coherente"] = len(fuera) * 2 <= len(comparables)
         if reg["produccion_coherente"]:
             # Las temporadas sueltas con otro precio no se tocan: son dato del
@@ -913,6 +1002,17 @@ def procesar(esc, escribir_geo):
     sin_modelo = []
     for f in geo["cuarteles"]["features"]:
         p = f["properties"]
+        # Arrendado a terceros: fuera del analisis. No cruza con ninguna
+        # variedad y su especie pasa a "Arrendado" para que en el mapa forme su
+        # propia rama gris -como "Disponible"- en vez de colarse en la de la
+        # variedad que tenia plantada. Se guarda el flag para que la ficha lo
+        # diga, y la variedad real se conserva para poder nombrarla.
+        if any(c in ARRENDADOS for c in p.get("cuarteles", [])):
+            p["arrendado"] = True
+            p["especie"] = ESPECIE_ARRENDADO
+            p["modelo"] = []
+            p["aprox"] = False
+            continue
         claves = cruzar(p, variedades)
         p["modelo"] = list(claves)
         p["aprox"] = any(claves.values())
@@ -991,7 +1091,9 @@ def procesar(esc, escribir_geo):
             if c["kg"][i] is None:
                 continue
             cosechas["kg"][i] += c["kg"][i]
-            cosechas["ha"][i] += reg["ha"]
+            # La misma area que produjo la cosecha, no la del modelo -por los
+            # cuarteles arrendados difieren en Candy Hearts y Sweet Celebration-.
+            cosechas["ha"][i] += c["ha"]
     cosechas["ha"] = [round(x, 2) for x in cosechas["ha"]]
     cosechas["rend_kg_ha"] = [None if not h else round(k / h)
                               for k, h in zip(cosechas["kg"], cosechas["ha"])]
@@ -1002,16 +1104,26 @@ def procesar(esc, escribir_geo):
     ha_clemenules = sum(p["ha"] for lst in plantaciones.values() for p in lst
                         if norm(p.get("especie_tasacion") or "") == "clementinos"
                         and p["ha"] == 10.18)
+    # Superficie que el modelo dejo de contar por los cuarteles arrendados. El
+    # "antes de arrendar" se reconstruye sumandola de vuelta a la modelada, y
+    # asi la vinifera arrancada sigue midiendose contra la superficie plantada
+    # del predio y no se mezcla con el arriendo.
+    ha_arrendados = round(sum(a["ha"] for a in ARRENDADOS.values()), 2)
+    ha_plantada = round(supuestos["superficie_tasacion"] - ha_clemenules, 2)
+    ha_antes_arrendar = round(supuestos["superficie_modelada"] + ha_arrendados, 2)
     conciliacion = [
         {"concepto": "Superficie plantada según tasación", "ha": supuestos["superficie_tasacion"],
          "nota": "Tasación Comercial N° 599-2026-SIMM, tablas pág. 15-17"},
         {"concepto": "Menos Clemenules (no productivo)", "ha": round(-ha_clemenules, 2),
          "nota": "10,18 ha plantadas en 1999, fuera de producción"},
-        {"concepto": "Superficie plantada", "ha": round(supuestos["superficie_tasacion"] - ha_clemenules, 2),
+        {"concepto": "Superficie plantada", "ha": ha_plantada,
          "nota": "Subtotal"},
-        {"concepto": "Menos vinífera arrancada", "ha": round(
-            supuestos["superficie_modelada"] - (supuestos["superficie_tasacion"] - ha_clemenules), 2),
+        {"concepto": "Menos vinífera arrancada", "ha": round(ha_antes_arrendar - ha_plantada, 2),
          "nota": "Cabernet Sauvignon y Cabernet Franc arrancados"},
+        {"concepto": "Superficie productiva del predio", "ha": ha_antes_arrendar,
+         "nota": "Subtotal"},
+        {"concepto": "Menos cuarteles arrendados", "ha": round(-ha_arrendados, 2),
+         "nota": "5174 (Candy Hearts) y 5133 (Sweet Celebration), arrendados a terceros"},
         {"concepto": "Superficie productiva modelada", "ha": supuestos["superficie_modelada"],
          "nota": "Base de todo el modelo financiero"},
     ]
@@ -1040,6 +1152,7 @@ def procesar(esc, escribir_geo):
                 for r in variedades.values() if r.get("temporadas_otro_precio")),
             "variedades_sin_cuartel": sorted(r["variedad"] for r in variedades.values() if not r["cuarteles"]),
             "cuarteles_sin_modelo": sorted(set(sin_modelo)),
+            "arrendados": ["%s (%s)" % (c, ARRENDADOS[c]["variedad"]) for c in sorted(ARRENDADOS)],
             "ha_detalle_plantaciones": ha_tasacion,
             "inputs_faltantes": faltantes,
             "cosecha": avisos_cosecha,
