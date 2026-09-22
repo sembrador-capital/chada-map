@@ -235,9 +235,20 @@ esos cinco lo dice con nombre y apellido.
 El filtro de rentabilidad y el de la leyenda son **independientes y se
 componen**: se puede pedir las positivas y después apagar Cerezos. La cabecera
 de la leyenda declara los dos, y «Todo» sigue siendo la salida de cualquiera de
-ellos. El control vive en Financiero —el signo del EBITDA es una pregunta de esa
-pestaña— pero lo que deja puesto vale en todas: filtrar ahí y pasar a Suelos
-muestra qué suelo tienen justamente los paños que ganan plata.
+ellos.
+
+El control está en **Financiero y en Producción** —las dos pestañas donde la
+pregunta tiene sentido— y lo que deja puesto vale en todas: filtrar y pasar a
+Suelos muestra qué suelo tienen justamente los paños que ganan plata. El cruce
+más útil es con *Cosecha real*: las 130,5 ha rentables cosecharon 18.288 kg/ha
+en 2025/26 contra los 22.127 que el modelo les pide en plena producción, un
+**82,7%**, mientras el predio completo va en 71,9%. Los paños que ganan plata
+son también los que están más cerca de su meta.
+
+El filtro mira **siempre el EBITDA del modelo**, no el de la temporada
+cosechada: en *Cosecha real* el selector de temporada muestra otro eje de
+tiempo, así que tanto el botón como la cabecera de la leyenda escriben contra
+qué temporada se está evaluando («EBITDA + en 2028-2029»).
 
 ### La superficie que muestra la ficha
 

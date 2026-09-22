@@ -663,8 +663,8 @@ body.panel-abierto .data-stamp { right:408px; }
         <label class="fc-label">Rentabilidad</label>
         <div class="seg" id="segRent" role="group" aria-label="Filtrar por signo del EBITDA">
             <button type="button" data-rent="" class="activo" title="Todas las variedades">Todas</button>
-            <button type="button" data-rent="pos" title="Sólo las variedades con EBITDA/ha positivo en la temporada elegida">EBITDA +</button>
-            <button type="button" data-rent="neg" title="Sólo las variedades con EBITDA/ha cero o negativo en la temporada elegida">EBITDA −</button>
+            <button type="button" data-rent="pos" id="btnRentPos">EBITDA +</button>
+            <button type="button" data-rent="neg" id="btnRentNeg">EBITDA −</button>
         </div>
     </div>
     <div class="fc-group" id="grpSubSuelo" hidden>
@@ -1884,7 +1884,8 @@ function actualizarSubLeyenda() {
     if (clavesRent) {
         const regs = clavesVisibles();
         const ha = regs.reduce((a, v) => a + v.ha, 0);
-        partes.push(`<b class="lg-filtro">EBITDA ${filtroRent === 'pos' ? '+' : '−'}</b> · ` +
+        partes.push(`<b class="lg-filtro">EBITDA ${filtroRent === 'pos' ? '+' : '−'}</b> ` +
+            `en ${esc(MOD.temporadas[t])} · ` +
             regs.length + ' de ' + MOD.variedades.length + ' variedades · ' + nf(ha, 1) + ' ha');
     }
     if (apagadas) partes.push(`<b class="lg-filtro">${apagadas} ${apagadas === 1 ? 'rama apagada' : 'ramas apagadas'}</b>`);
@@ -1986,6 +1987,13 @@ const mezclaSignos = p => !!clavesRent && (() => {
 function sincronizarRentabilidad() {
     document.querySelectorAll('#segRent button').forEach(b =>
         b.classList.toggle('activo', b.dataset.rent === (filtroRent || '')));
+    // La temporada va en el tooltip porque el filtro siempre mira el EBITDA del
+    // MODELO: en Producción ▸ Cosechada el selector de arriba muestra temporadas
+    // cosechadas, que son otro eje de tiempo, y sin decirlo el filtro parecería
+    // referirse a esas.
+    const cuando = MOD ? ' en ' + MOD.temporadas[t] : '';
+    $('btnRentPos').title = 'Sólo las variedades con EBITDA/ha positivo' + cuando;
+    $('btnRentNeg').title = 'Sólo las variedades con EBITDA/ha cero o negativo' + cuando;
 }
 
 /* Aislar una rama: la deja sola encendida y, si ya estaba sola, devuelve todas.
@@ -3016,10 +3024,12 @@ function sincronizarControles() {
     $('grpSubProd').hidden = modo !== 'produccion';
     $('grpEscenario').hidden = !conEscenario();
     $('grpMetrica').hidden = modo !== 'financiero';
-    // El signo del EBITDA es una pregunta de Financiero, pero el filtro que
-    // deja puesto vale en todas: filtrar acá y pasar a Suelos muestra qué suelo
-    // tienen justamente los paños que ganan plata.
-    $('grpRent').hidden = modo !== 'financiero';
+    // El filtro por signo del EBITDA vale en todas las pestañas -lo que deja
+    // puesto no se borra al cambiar de modo-, pero el control se ofrece donde
+    // la pregunta tiene sentido: en Financiero y en Producción, que es donde
+    // uno quiere cruzar cuánto rinde un paño con si gana plata. En Suelos y en
+    // Vista general el filtro sigue en pie y lo declara la leyenda.
+    $('grpRent').hidden = !(modo === 'financiero' || modo === 'produccion');
     $('grpSubSuelo').hidden = modo !== 'suelos';
     $('grpSuelo').hidden = modo !== 'suelos';
     // El terreno y el suelo no cambian con la temporada: el selector sugeriría
