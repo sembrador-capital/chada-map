@@ -659,6 +659,14 @@ body.panel-abierto .data-stamp { right:408px; }
             <button type="button" data-sub="cosecha" title="Rendimiento efectivamente cosechado, de la hoja Fuente 2 Rendimientos">Cosechada</button>
         </div>
     </div>
+    <div class="fc-group" id="grpRent" hidden>
+        <label class="fc-label">Rentabilidad</label>
+        <div class="seg" id="segRent" role="group" aria-label="Filtrar por signo del EBITDA">
+            <button type="button" data-rent="" class="activo" title="Todas las variedades">Todas</button>
+            <button type="button" data-rent="pos" title="Sólo las variedades con EBITDA/ha positivo en la temporada elegida">EBITDA +</button>
+            <button type="button" data-rent="neg" title="Sólo las variedades con EBITDA/ha cero o negativo en la temporada elegida">EBITDA −</button>
+        </div>
+    </div>
     <div class="fc-group" id="grpSubSuelo" hidden>
         <label class="fc-label">Ver</label>
         <div class="seg" id="segSuelo" role="group" aria-label="Qué mirar del suelo">
@@ -1043,6 +1051,23 @@ let subSuelo = 'fisico', metricaSuelo = 'clase';
    tiempo distintos y compartirlos haría que elegir 2023-2024 en una dejara la
    otra en una temporada que no existe. */
 let subProd = 'modelo', tc = 0;
+/* Filtro por signo del EBITDA: null, 'pos' o 'neg'. No es un modo paralelo al
+   filtro de la leyenda —eso daría dos verdades sobre qué está encendido—, sino
+   una forma rápida de fijar el mismo set de ramas visibles. Se recuerda para
+   poder volver a aplicarlo cuando cambia la temporada, porque el signo del
+   EBITDA cambia con ella: en 2025-2026 hay 68 ha en azul y en 2028-2029, 131. */
+let filtroRent = null;
+/* Las variedades del modelo que el filtro deja pasar, o null si está apagado.
+   Va por VARIEDAD y no por rama de la leyenda a propósito: el número que se
+   quiere reproducir —131 ha con EBITDA positivo— sale de la tabla del modelo,
+   que es por variedad, y las ramas del KMZ no calzan una a una con ella.
+   «Cerezos / Mixtos» es UNA fila de la leyenda con ocho variedades dentro, de
+   las que dos ganan plata; decidiendo por rama, esas 22,7 ha se perdían y el
+   total daba 120,7 en vez de 130,5.
+
+   Es un segundo tamiz, independiente del de la leyenda: los dos se aplican a la
+   vez, así que se puede pedir «las positivas» y después apagar Cerezos. */
+let clavesRent = null;
 let SUELO = {};                // clase -> entrada de la simbología del plano
 let UTILES = 1;                // temporadas hasta plena producción, inclusive
 let vistaGrafico = 'serie', ordenTabla = { campo: 'ebitda_ha', asc: false };
@@ -1378,9 +1403,17 @@ function exprColor() {
     return ['match', ['get', 'uid'], ...pares, css('--dat-sindato')];
 }
 
+/* Se enumeran los uid que pasan en vez de armar la expresión sobre
+   especie|variedad: el filtro de rentabilidad mira las variedades del MODELO
+   que lleva cada paño, y eso no se puede escribir como una comparación de
+   propiedades. Son 174 identificadores, el mismo orden de magnitud que la
+   expresión de color que ya se arma así. */
 function exprFiltro() {
-    if (visibles.size === 0) return ['boolean', false];
-    return ['match', ['concat', ['get', 'especie'], '|', ['get', 'variedad']], [...visibles], true, false];
+    const uids = GEO.cuarteles.features
+        .filter(f => cuartelVisible(f.properties))
+        .map(f => f.properties.uid);
+    if (!uids.length) return ['boolean', false];
+    return ['match', ['get', 'uid'], uids, true, false];
 }
 
 function montarCapas() {
@@ -1682,6 +1715,13 @@ function mostrarFicha(p, punto, fija = false) {
                   chip(esc(v.variedad), f(v[campo.c][t]))).join('')) : '')
             : '');
         if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
+        if (mezclaSignos(p)) {
+            const dentro = regs.filter(v => clavesRent.has(vkey(v.especie, v.variedad))).map(v => v.variedad);
+            const fuera = regs.filter(v => !clavesRent.has(vkey(v.especie, v.variedad))).map(v => v.variedad);
+            avisos.push('Este cuartel lleva variedades de los <b>dos signos</b> y el paño es uno solo: ' +
+                'pasa el filtro por ' + dentro.map(esc).join(', ') + ', y también tiene ' + fuera.map(esc).join(', ') +
+                '. El color es el del cuartel completo, no el de la variedad que lo dejó entrar.');
+        }
 
     } else if (verTerreno()) {
         cuerpo = kvKmz(p) +
@@ -1838,15 +1878,27 @@ function pintarDots() {
 
 function actualizarSubLeyenda() {
     const apagadas = Object.keys(MODELOS_DE_VKEY).length - visibles.size;
-    $('legendSub').innerHTML = apagadas
-        ? `<b class="lg-filtro">${apagadas} ${apagadas === 1 ? 'rama apagada' : 'ramas apagadas'}</b> · toca «Todo» para verlas`
+    const partes = [];
+    // El filtro de rentabilidad primero: es el que explica un total que no es
+    // el del predio, y se lee mejor con el número que con el nombre del signo.
+    if (clavesRent) {
+        const regs = clavesVisibles();
+        const ha = regs.reduce((a, v) => a + v.ha, 0);
+        partes.push(`<b class="lg-filtro">EBITDA ${filtroRent === 'pos' ? '+' : '−'}</b> · ` +
+            regs.length + ' de ' + MOD.variedades.length + ' variedades · ' + nf(ha, 1) + ' ha');
+    }
+    if (apagadas) partes.push(`<b class="lg-filtro">${apagadas} ${apagadas === 1 ? 'rama apagada' : 'ramas apagadas'}</b>`);
+    $('legendSub').innerHTML = partes.length
+        ? partes.join(' · ') + ' · toca «Todo» para ver todo'
         : MOD.variedades.length + ' variedades · ' + nf(MOD.totales.ha, 2) + ' ha';
-    $('btnTodo').classList.toggle('destacado', apagadas > 0);
+    $('btnTodo').classList.toggle('destacado', apagadas > 0 || !!clavesRent);
 }
 
 function pintarLeyenda() {
     document.querySelectorAll('.lg-vars .lg-row').forEach(row => {
-        row.classList.toggle('off', !visibles.has(row.dataset.vkey));
+        const k = row.dataset.vkey;
+        const pasa = !clavesRent || (MODELOS_DE_VKEY[k] || []).some(m => clavesRent.has(m));
+        row.classList.toggle('off', !visibles.has(k) || !pasa);
     });
     document.querySelectorAll('.lg-esp').forEach(esp => {
         const keys = [...esp.querySelectorAll('.lg-vars .lg-row')].map(r => r.dataset.vkey);
@@ -1866,7 +1918,7 @@ function pintarEscala() {
         const usados = {};
         GEO.cuarteles.features.forEach(f => {
             const s = f.properties.suelo;
-            if (s && visibles.has(vkey(f.properties.especie, f.properties.variedad)))
+            if (s && cuartelVisible(f.properties))
                 usados[s.clase] = (usados[s.clase] || 0) + 1;
         });
         caja.hidden = false;
@@ -1898,6 +1950,44 @@ function pintarEscala() {
         <div class="escala-nd"><i style="background:${css('--dat-sindato')}"></i>Sin contraparte en el modelo</div>`;
 }
 
+/* Deja pasar sólo las variedades del signo pedido. Las que no tienen EBITDA
+   —lo que el KMZ agrupa como Disponible, sin contraparte en el modelo— quedan
+   fuera de las dos listas: no es que ganen o pierdan, es que no hay número.
+
+   Se encienden además todas las ramas: es una acción de «muéstrame esto», como
+   Todo y Nada, y dejarla debajo de un filtro de leyenda anterior daría un
+   número más chico que el de la tabla sin decir por qué. */
+function aplicarRentabilidad(signo) {
+    filtroRent = signo;
+    clavesRent = null;
+    if (signo) {
+        clavesRent = new Set();
+        MOD.variedades.forEach(v => {
+            const eb = v.ebitda_ha[t];
+            if (eb == null) return;
+            if (signo === 'pos' ? eb > 0 : eb <= 0) clavesRent.add(vkey(v.especie, v.variedad));
+        });
+        Object.keys(MODELOS_DE_VKEY).forEach(k => visibles.add(k));
+    }
+    aplicarFiltro();
+}
+
+/* Los cinco cuarteles que llevan variedades de los dos signos. El paño es uno
+   solo y no se puede partir, así que aparece —tiene una variedad que gana— y
+   se pinta con su valor recompuesto, que puede salir rojo. La ficha lo dice. */
+const mezclaSignos = p => !!clavesRent && (() => {
+    const ms = arr(p.modelo).filter(k => MIDX[k]);
+    return ms.some(k => clavesRent.has(k)) && ms.some(k => !clavesRent.has(k));
+})();
+
+/* Qué botón va encendido. Sale del estado y no de la última pulsación: si el
+   usuario toca una fila de la leyenda, la selección deja de ser «las
+   positivas» y ningún botón debe decir que lo es. */
+function sincronizarRentabilidad() {
+    document.querySelectorAll('#segRent button').forEach(b =>
+        b.classList.toggle('activo', b.dataset.rent === (filtroRent || '')));
+}
+
 /* Aislar una rama: la deja sola encendida y, si ya estaba sola, devuelve todas.
    Apagar treinta y dos variedades a mano para poder mirar una es el camino
    largo del mismo viaje, y volver de ahí era peor todavía. */
@@ -1919,18 +2009,26 @@ function resaltar(claves) {
         : ['boolean', false]);
 }
 
+/* ¿Se ve este cuartel? Dos tamices: la rama tiene que estar encendida en la
+   leyenda y, si hay filtro de rentabilidad, el paño tiene que llevar al menos
+   una variedad que lo pase. Un cuartel mixto con una variedad de cada signo
+   aparece: tiene algo que mostrar. */
+const cuartelVisible = p => visibles.has(vkey(p.especie, p.variedad)) &&
+    (!clavesRent || arr(p.modelo).some(k => clavesRent.has(k)));
+
 /* El filtro es la única puerta: capas, métricas, leyenda y panel leen el mismo set. */
 function aplicarFiltro() {
     // Antes que nada: cambiar qué ramas están encendidas puede cambiar la
     // unidad en que habla toda la pestaña.
     actualizarUnidad();
+    sincronizarRentabilidad();
     const f = exprFiltro();
     ['cuarteles-fill', 'cuarteles-line', 'cuarteles-label'].forEach(id => {
         if (map.getLayer(id)) map.setFilter(id, f);
     });
     if (fijado) {
         const p = GEO.cuarteles.features.find(x => x.properties.uid === fijado);
-        if (p && !visibles.has(vkey(p.properties.especie, p.properties.variedad))) desfijar();
+        if (p && !cuartelVisible(p.properties)) desfijar();
     }
     // La escala también: depende del filtro por dos vías. La leyenda de tipos de
     // suelo cuenta los cuarteles encendidos, y en Producción la unidad -kilos o
@@ -1949,7 +2047,9 @@ function repintar() {
    variedades que el modelo tiene y el KMZ no dibuja siguen sumando. */
 const idsVisibles = () => {
     const s = new Set();
-    visibles.forEach(k => (MODELOS_DE_VKEY[k] || []).forEach(m => s.add(m)));
+    visibles.forEach(k => (MODELOS_DE_VKEY[k] || []).forEach(m => {
+        if (!clavesRent || clavesRent.has(m)) s.add(m);
+    }));
     return [...s];
 };
 const clavesVisibles = () => idsVisibles().map(k => MIDX[k]).filter(Boolean);
@@ -1992,7 +2092,7 @@ function pintarMetricas() {
 
 function pintarMetricasBarra() {
     const regs = clavesVisibles(), a = agregado(regs, t);
-    const cuarteles = GEO.cuarteles.features.filter(f => visibles.has(vkey(f.properties.especie, f.properties.variedad))).length;
+    const cuarteles = GEO.cuarteles.features.filter(f => cuartelVisible(f.properties)).length;
     const plural = (n, s, p) => n === 1 ? s : p;
     // Con el árbol filtrado, el titular no es la superficie del predio. En vez
     // de mostrar un número suelto que obliga a preguntarse de dónde salió, la
@@ -2011,7 +2111,7 @@ function pintarMetricasBarra() {
     }
     if (verFisico()) {
         const conSuelo = GEO.cuarteles.features.map(f => f.properties)
-            .filter(p => visibles.has(vkey(p.especie, p.variedad)) && p.suelo);
+            .filter(p => cuartelVisible(p) && p.suelo);
         const tipos = new Set(conSuelo.map(p => p.suelo.clase));
         const prof = conSuelo.length ? conSuelo.reduce((a, p) => a + p.suelo.prof_cm, 0) / conSuelo.length : null;
         const someros = conSuelo.filter(p => p.suelo.prof_cm <= 25).length;
@@ -2028,7 +2128,7 @@ function pintarMetricasBarra() {
         // por superficie del modelo para que un paño de 0,4 ha no pese igual
         // que uno de 38.
         const conDem = GEO.cuarteles.features.map(f => f.properties)
-            .filter(p => visibles.has(vkey(p.especie, p.variedad)) && p.pendiente != null);
+            .filter(p => cuartelVisible(p) && p.pendiente != null);
         const peso = p => (p.modelo || []).reduce((a, k) => a + ((MIDX[k] || {}).ha || 0), 0) || 0.1;
         const wt = conDem.reduce((a, p) => a + peso(p), 0);
         const pend = wt ? conDem.reduce((a, p) => a + p.pendiente * peso(p), 0) / wt : null;
@@ -2112,7 +2212,7 @@ const tituloPanel = () => modo === 'suelos'
    una variedad entre sus cuarteles exigiría un supuesto que nadie pidió. */
 const cuartelesVisibles = () => GEO.cuarteles.features
     .map(f => f.properties)
-    .filter(p => visibles.has(vkey(p.especie, p.variedad)));
+    .filter(p => cuartelVisible(p));
 
 /* Agregado por especie del KMZ, con las hectáreas del modelo. */
 function porEspecieVisible() {
@@ -2916,6 +3016,10 @@ function sincronizarControles() {
     $('grpSubProd').hidden = modo !== 'produccion';
     $('grpEscenario').hidden = !conEscenario();
     $('grpMetrica').hidden = modo !== 'financiero';
+    // El signo del EBITDA es una pregunta de Financiero, pero el filtro que
+    // deja puesto vale en todas: filtrar acá y pasar a Suelos muestra qué suelo
+    // tienen justamente los paños que ganan plata.
+    $('grpRent').hidden = modo !== 'financiero';
     $('grpSubSuelo').hidden = modo !== 'suelos';
     $('grpSuelo').hidden = modo !== 'suelos';
     // El terreno y el suelo no cambian con la temporada: el selector sugeriría
@@ -2966,7 +3070,14 @@ $('segSuelo').querySelectorAll('button').forEach(b => b.addEventListener('click'
     construirSelectores();
     repintar();
 }));
-$('selTemporada').addEventListener('change', e => { if (!verCosecha()) { t = +e.target.value; repintar(); if (fijado) desfijar(); } });
+$('selTemporada').addEventListener('change', e => {
+    if (verCosecha()) return;
+    t = +e.target.value;
+    // El signo del EBITDA cambia con la temporada, así que el filtro se vuelve
+    // a evaluar en vez de quedarse con las ramas de la temporada anterior.
+    if (filtroRent) aplicarRentabilidad(filtroRent); else repintar();
+    if (fijado) desfijar();
+});
 $('btnPanel').addEventListener('click', () => togglePanel(!panelAbierto()));
 $('panelAsa').addEventListener('click', () => togglePanel(true));
 $('mpCerrar').addEventListener('click', () => togglePanel(false));
@@ -2980,8 +3091,11 @@ document.querySelectorAll('.mp-chart-tab').forEach(b => b.addEventListener('clic
     dibujarGrafico(clavesVisibles());
 }));
 
-$('btnTodo').addEventListener('click', () => { Object.keys(MODELOS_DE_VKEY).forEach(k => visibles.add(k)); aplicarFiltro(); });
-$('btnNada').addEventListener('click', () => { visibles.clear(); aplicarFiltro(); });
+// «Todo» es la salida de cualquier filtro, incluido el de rentabilidad.
+$('btnTodo').addEventListener('click', () => { filtroRent = clavesRent = null; Object.keys(MODELOS_DE_VKEY).forEach(k => visibles.add(k)); aplicarFiltro(); });
+$('btnNada').addEventListener('click', () => { filtroRent = clavesRent = null; visibles.clear(); aplicarFiltro(); });
+$('segRent').querySelectorAll('button').forEach(b => b.addEventListener('click', () =>
+    aplicarRentabilidad(b.dataset.rent || null)));
 
 const conmutar = (id, fn) => $(id).addEventListener('change', e => fn(e.target.checked));
 const vis = (capa, on) => { if (map.getLayer(capa)) map.setLayoutProperty(capa, 'visibility', on ? 'visible' : 'none'); };

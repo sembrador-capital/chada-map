@@ -206,6 +206,39 @@ mapa esconde el selector y la tabla comparativa cuando hay menos de dos. Para
 volver a comparar basta agregar ahí la entrada del otro libro —id, nombre,
 archivo de salida y nota— y correr el script; `index.html` no se toca.
 
+### Qué superficie gana plata
+
+Financiero trae un filtro por signo del EBITDA: **Todas · EBITDA + · EBITDA −**.
+En plena producción (2028-2029) las variedades con EBITDA/ha positivo suman
+**130,54 ha de las 292,23**, el 45% del predio, repartidas en 38 de los 174
+paños. El resto —161,69 ha— pierde plata. Las dos mitades suman exactamente el
+predio, que es la comprobación de que nada se pierde ni se cuenta dos veces.
+
+El signo cambia con la temporada, así que el filtro se vuelve a evaluar al
+cambiarla: 68,03 ha en 2025-2026, 125,72 en 2026-2027, 127,30 en 2027-2028 y
+130,54 de ahí en adelante.
+
+**El filtro es por variedad del modelo, no por rama de la leyenda.** Es la
+diferencia entre que el total cuadre y que no: el número que se quiere
+reproducir sale de la tabla del modelo, que es por variedad, y las ramas del KMZ
+no calzan una a una con ella. «Cerezos / Mixtos» es **una** fila de la leyenda
+con ocho variedades dentro, de las que dos ganan plata; decidiendo por rama,
+esas 22,7 ha se perdían y el total daba 120,7 en vez de 130,5.
+
+Como el tamiz es por variedad y el mapa pinta paños, hay **cinco cuarteles que
+llevan variedades de los dos signos** —`8201 / 8202-A` tiene Lapins (+2.055
+US$/ha) y Royal Dawn (−5.092)—. El paño es uno solo y no se puede partir:
+aparece, porque tiene algo que mostrar, y se pinta con el valor del cuartel
+completo, que puede salir rojo dentro de un filtro de positivos. La ficha de
+esos cinco lo dice con nombre y apellido.
+
+El filtro de rentabilidad y el de la leyenda son **independientes y se
+componen**: se puede pedir las positivas y después apagar Cerezos. La cabecera
+de la leyenda declara los dos, y «Todo» sigue siendo la salida de cualquiera de
+ellos. El control vive en Financiero —el signo del EBITDA es una pregunta de esa
+pestaña— pero lo que deja puesto vale en todas: filtrar ahí y pasar a Suelos
+muestra qué suelo tienen justamente los paños que ganan plata.
+
 ### La superficie que muestra la ficha
 
 La ficha del cuartel da dos hectáreas y son cosas distintas:
