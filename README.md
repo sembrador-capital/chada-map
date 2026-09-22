@@ -197,8 +197,9 @@ Dos detalles de la fuente, ambos visibles en el mapa:
 ### Un solo modelo, con lugar para más
 
 Producción y Financiero muestran **la última versión del modelo financiero**
-(`Financial_Model_Hacienda_Chada_v3.xlsx`). En plena producción (2028-2029) deja
-un EBITDA de **−US$ 93.775** sobre ingresos de US$ 5,91 M y costos de US$ 5,65 M.
+(`Financial_Model_Hacienda_Chada_v4.xlsx`). En plena producción (2028-2029) deja
+un EBITDA de **+US$ 111.833** sobre ingresos de US$ 6,23 M y costos de US$ 5,77 M
+—la versión anterior (v3) cerraba en −US$ 93.775—.
 
 La maquinaria para comparar dos modelos lado a lado sigue en pie pero apagada:
 la lista `ESCENARIOS` de `tools/modelo_to_json.py` tiene una sola entrada, y el
@@ -208,22 +209,27 @@ archivo de salida y nota— y correr el script; `index.html` no se toca.
 
 ### Qué superficie gana plata
 
-Financiero trae un filtro por signo del EBITDA: **Todas · EBITDA + · EBITDA −**.
-En plena producción (2028-2029) las variedades con EBITDA/ha positivo suman
-**130,54 ha de las 292,23**, el 45% del predio, repartidas en 38 de los 174
-paños. El resto —161,69 ha— pierde plata. Las dos mitades suman exactamente el
-predio, que es la comprobación de que nada se pierde ni se cuenta dos veces.
+Financiero y Producción traen un filtro por signo del EBITDA: **Todas ·
+EBITDA + · EBITDA −**. En plena producción (2028-2029) las variedades con
+EBITDA/ha positivo suman **186,83 ha de las 292,23**, el 64% del predio,
+repartidas en 57 de los 174 paños. El resto —105,40 ha— pierde plata. Las dos
+mitades suman exactamente el predio, que es la comprobación de que nada se
+pierde ni se cuenta dos veces.
 
 El signo cambia con la temporada, así que el filtro se vuelve a evaluar al
-cambiarla: 68,03 ha en 2025-2026, 125,72 en 2026-2027, 127,30 en 2027-2028 y
-130,54 de ahí en adelante.
+cambiarla: 68,03 ha en 2025-2026, 122,78 en 2026-2027, 124,36 en 2027-2028 y
+186,83 de ahí en adelante. El salto entre 2027-2028 y 2028-2029 —de 124 a 187
+ha— es la versión en superficie del mismo cambio que muestra la tabla de
+arriba: v4 destraba varias variedades que en el modelo anterior no llegaban a
+ser rentables ni en su mejor temporada.
 
 **El filtro es por variedad del modelo, no por rama de la leyenda.** Es la
 diferencia entre que el total cuadre y que no: el número que se quiere
 reproducir sale de la tabla del modelo, que es por variedad, y las ramas del KMZ
 no calzan una a una con ella. «Cerezos / Mixtos» es **una** fila de la leyenda
-con ocho variedades dentro, de las que dos ganan plata; decidiendo por rama,
-esas 22,7 ha se perdían y el total daba 120,7 en vez de 130,5.
+con ocho variedades dentro, de las que sólo algunas ganan plata; decidiendo por
+rama en vez de por variedad, esas hectáreas se perdían y el total no cuadraba
+con la tabla del modelo.
 
 Como el tamiz es por variedad y el mapa pinta paños, hay **cinco cuarteles que
 llevan variedades de los dos signos** —`8201 / 8202-A` tiene Lapins (+2.055
@@ -240,9 +246,13 @@ ellos.
 El control está en **Financiero y en Producción** —las dos pestañas donde la
 pregunta tiene sentido— y lo que deja puesto vale en todas: filtrar y pasar a
 Suelos muestra qué suelo tienen justamente los paños que ganan plata. El cruce
-más útil es con *Cosecha real*: las 130,5 ha rentables cosecharon 18.288 kg/ha
-en 2025/26 contra los 22.127 que el modelo les pide en plena producción, un
-**82,7%**, mientras el predio completo va en 71,9%. Los paños que ganan plata
+más útil es con *Cosecha real*: las 186,8 ha rentables cosecharon 17.476 kg/ha
+en 2025/26 contra los 24.561 que el modelo les pide en plena producción, un
+**71,2%** —prácticamente lo mismo que el 71,9% del predio completo—. Con v3, las
+130,5 ha rentables de entonces estaban bastante más cerca de su meta que el
+predio (82,7% contra 71,9%); con v4 esa ventaja desaparece, porque el conjunto
+de variedades rentables se ensanchó y ya no es sólo el núcleo más eficiente. Los
+paños que ganan plata
 son también los que están más cerca de su meta.
 
 El filtro mira **siempre el EBITDA del modelo**, no el de la temporada
@@ -538,16 +548,28 @@ datos_fuente/                   Los .xlsx de los modelos y el PDF del plano. Ign
 
 ### Cuando llegue un modelo financiero nuevo
 
-Es lo que va a pasar seguido: alguien edita el Excel y lo manda. El
-procedimiento son dos pasos.
+Es lo que va a pasar seguido, y cada vez trae un nombre de archivo distinto
+—`v3`, `v4`, `v5`—: alguien edita el Excel y lo manda con la versión siguiente
+en el nombre. El procedimiento son tres pasos.
 
 ```bash
-# 1. dejar el libro nuevo en su lugar, con el mismo nombre
-cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v3.xlsx
+# 1. dejar el libro nuevo en datos_fuente/, con su propio nombre versionado
+cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v5.xlsx
+```
 
-# 2. releer los modelos y volver a cruzarlos contra los cuarteles
+```python
+# 2. apuntar ESCENARIOS al archivo nuevo, en tools/modelo_to_json.py
+{"id": "v5", "nombre": "v5", "libro": "Financial_Model_Hacienda_Chada_v5.xlsx",
+ "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
+```
+
+```bash
+# 3. releer los modelos y volver a cruzarlos contra los cuarteles
 python tools/modelo_to_json.py
 ```
+
+El libro viejo se puede dejar en `datos_fuente/` —no se sube a git— o borrarlo;
+no lo lee nadie una vez que `ESCENARIOS` deja de apuntarlo.
 
 El script lee **todos los escenarios** en una corrida y termina con la tabla
 comparativa, así que no hay que acordarse de correrlo dos veces. Los nombres de
@@ -556,7 +578,7 @@ archivo y los rótulos viven en la lista `ESCENARIOS`, al principio de
 
 ```python
 ESCENARIOS = [
-    {"id": "v3", "nombre": "v3", "libro": "Financial_Model_Hacienda_Chada_v3.xlsx",
+    {"id": "v4", "nombre": "v4", "libro": "Financial_Model_Hacienda_Chada_v4.xlsx",
      "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ]
 ```

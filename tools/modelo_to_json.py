@@ -49,8 +49,8 @@ LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 # El mapa lee esta misma lista desde los JSON generados, asi que no hay que
 # tocar index.html.
 ESCENARIOS = [
-    {"id": "v3", "nombre": "v3",
-     "libro": "Financial_Model_Hacienda_Chada_v3.xlsx",
+    {"id": "v4", "nombre": "v4",
+     "libro": "Financial_Model_Hacienda_Chada_v4.xlsx",
      "salida": "modelo_data.json",
      # La nota es texto de pantalla, no comentario: va con tildes como todo lo
      # que termina a la vista del usuario.
