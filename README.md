@@ -208,14 +208,15 @@ Dos detalles de la fuente, ambos visibles en el mapa:
 ### Un solo modelo, con lugar para más
 
 Producción y Financiero muestran **la última versión del modelo financiero**
-(`Financial_Model_Hacienda_Chada_v6.xlsx`). En plena producción (2028-2029) deja
-un EBITDA de **+US$ 916.776** sobre ingresos de US$ 6,81 M y costos de US$ 5,55 M.
-El EBITDA total casi no se movió desde v5 (+US$ 915.146) —los dos cuarteles que
-v6 saca por arriendo eran chicos y de margen parejo—, pero la superficie
-modelada bajó de 292,23 a 284,02 ha. El salto grande de rentabilidad había sido
-antes: v3 cerraba en −US$ 93.775, v4 en +US$ 111.833, y v4→v5 sumó casi todo el
-EBITDA (ingresos +12,5% con costos planos) por el precio de exportación
-escalonado —ver el hallazgo más abajo—.
+(`Financial_Model_Hacienda_Chada_v7.xlsx`). En plena producción (2028-2029) deja
+un EBITDA de **+US$ 938.630** sobre ingresos de US$ 6,83 M y costos de US$ 5,55 M.
+v7 subió la producción de ciruela (Candy Red, Red Phoenix y Sweet Mary) desde
+2026-2027 en adelante —unos 15% más de kilos—, que agregan ~US$ 22 mil de EBITDA
+en plena producción sobre v6 (+US$ 916.776). Los precios de la uva no se movieron
+respecto de v6. El resto de la historia: v3 cerraba en −US$ 93.775, v4 en
++US$ 111.833, v4→v5 sumó casi todo el EBITDA (ingresos +12,5% con costos planos)
+por el precio de exportación escalonado —ver el hallazgo más abajo—, y v6 sacó
+dos cuarteles arrendados, bajando la superficie a 284,02 ha.
 
 La maquinaria para comparar dos modelos lado a lado sigue en pie pero apagada:
 la lista `ESCENARIOS` de `tools/modelo_to_json.py` tiene una sola entrada, y el
@@ -262,8 +263,8 @@ El control está en **Financiero y en Producción** —las dos pestañas donde l
 pregunta tiene sentido— y lo que deja puesto vale en todas: filtrar y pasar a
 Suelos muestra qué suelo tienen justamente los paños que ganan plata. El cruce
 más útil es con *Cosecha real*: las 193,5 ha rentables cosecharon 17.330 kg/ha
-en 2025/26 contra los 24.258 que el modelo les pide en plena producción, un
-**71,4%** —prácticamente lo mismo que el 72,9% del predio completo—. Con v3, las
+en 2025/26 contra los 24.451 que el modelo les pide en plena producción, un
+**70,9%** —prácticamente lo mismo que el 72,4% del predio completo—. Con v3, las
 130,5 ha rentables de entonces estaban bastante más cerca de su meta que el
 predio (82,7% contra 71,9%); desde v4 esa ventaja desaparece, porque el conjunto
 de variedades rentables se ensanchó y ya no es sólo el núcleo más eficiente.
@@ -502,6 +503,19 @@ con v3. El corte de temporada no está escrito a mano: se lee del propio
 encabezado («27-28» ⟶ busca "2027-2028" en la lista de temporadas), así que si
 el corte se mueve a otro año el script lo sigue sin que haya que tocarlo.
 
+**0e. v7 agregó una temporada de referencia sin P&L al frente.** El Consolidado
+de v7 sumó una columna 2024-2025 con producción pero con ingresos, costos y
+EBITDA en cero en todas las variedades: es el año de transición, no una
+proyección, y lo que produjo ya se ve en *Cosecha real*. Dejarla habría puesto
+una temporada de puros ceros al principio del selector y del filtro de EBITDA.
+El extractor la recorta con una regla, no por su nombre: mientras la primera
+temporada no tenga plata en ninguna variedad, la descarta —una temporada real
+con plata la corta—. Así v7 vuelve a las 21 temporadas de siempre, desde
+2025-2026. Un detalle que costó: `EBITDA/ha` se lee del Consolidado y no se
+recalcula, así que el recorte tiene que alcanzar a todos los bloques por
+temporada, no solo a producción/ingresos/costos/EBITDA; si no, el año recortado
+deja `EBITDA/ha` corrido y el filtro +/− mira la temporada equivocada.
+
 **0. La celda de rendimiento 25/26 de la vinífera traía un total, no un
 rendimiento** *(resuelto en v3)*. En `Inputs Generales`, la columna *Rendimiento 25/26* de Cabernet
 Sauvignon marca **46.622**, que es exactamente el total de kilos cosechados esa
@@ -593,12 +607,12 @@ en el nombre. El procedimiento son tres pasos.
 
 ```bash
 # 1. dejar el libro nuevo en datos_fuente/, con su propio nombre versionado
-cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v6.xlsx
+cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v7.xlsx
 ```
 
 ```python
 # 2. apuntar ESCENARIOS al archivo nuevo, en tools/modelo_to_json.py
-{"id": "v6", "nombre": "v6", "libro": "Financial_Model_Hacienda_Chada_v6.xlsx",
+{"id": "v7", "nombre": "v7", "libro": "Financial_Model_Hacienda_Chada_v7.xlsx",
  "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ```
 
@@ -617,7 +631,7 @@ archivo y los rótulos viven en la lista `ESCENARIOS`, al principio de
 
 ```python
 ESCENARIOS = [
-    {"id": "v6", "nombre": "v6", "libro": "Financial_Model_Hacienda_Chada_v6.xlsx",
+    {"id": "v7", "nombre": "v7", "libro": "Financial_Model_Hacienda_Chada_v7.xlsx",
      "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ]
 ```

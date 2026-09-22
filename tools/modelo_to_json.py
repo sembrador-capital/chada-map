@@ -49,8 +49,8 @@ LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 # El mapa lee esta misma lista desde los JSON generados, asi que no hay que
 # tocar index.html.
 ESCENARIOS = [
-    {"id": "v6", "nombre": "v6",
-     "libro": "Financial_Model_Hacienda_Chada_v6.xlsx",
+    {"id": "v7", "nombre": "v7",
+     "libro": "Financial_Model_Hacienda_Chada_v7.xlsx",
      "salida": "modelo_data.json",
      # La nota es texto de pantalla, no comentario: va con tildes como todo lo
      # que termina a la vista del usuario.
@@ -856,6 +856,30 @@ def procesar(esc, escribir_geo):
     wb = abrir_libro(libro)
 
     temporadas, variedades = leer_consolidado(wb["Consolidado por variedad"])
+    # Recorte de temporadas iniciales sin P&L. v7 sumo un "2024-2025" de
+    # referencia -produccion real pero ingresos, costos y EBITDA en cero en
+    # TODAS las variedades-: es el ano de transicion, no una proyeccion, y lo
+    # que produjo ya se ve en Cosecha real. Dejarlo pondria una temporada de
+    # puros ceros al frente del selector y del filtro de EBITDA. Se recorta por
+    # una regla, no por el nombre: mientras la primera temporada no tenga plata
+    # en ninguna variedad, se descarta. Una temporada real con plata la corta.
+    def temporada_sin_plata(i):
+        return all((r["ingresos"][i] or 0) == 0 and (r["costos"][i] or 0) == 0
+                   and (r["ebitda"][i] or 0) == 0 for r in variedades.values())
+    recorte = 0
+    while recorte < len(temporadas) - 1 and temporada_sin_plata(recorte):
+        recorte += 1
+    if recorte:
+        print("  se recortan %d temporada(s) inicial(es) sin P&L: %s"
+              % (recorte, ", ".join(temporadas[:recorte])))
+        temporadas = temporadas[recorte:]
+        for r in variedades.values():
+            # Todos los bloques por temporada, no solo cuatro: EBITDA/ha se lee
+            # del Consolidado y no se recalcula despues, asi que si no se recorta
+            # queda un ano corrido y el filtro EBITDA +/- mira la temporada
+            # equivocada.
+            for campo in CAB_CONSOLIDADO:
+                r[campo] = r[campo][recorte:]
     # El largo lo manda el libro, no una constante: si el modelo cambia de
     # horizonte, el JSON lo sigue sin que nadie tenga que tocar el script.
     N_TEMPORADAS = len(temporadas)
