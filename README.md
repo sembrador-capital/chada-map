@@ -194,56 +194,36 @@ Dos detalles de la fuente, ambos visibles en el mapa:
   una mirara la Ficha y la otra cayera a superficie, las cuotas no sumarían uno
   y el total de la temporada se inflaría. Van marcadas con `*` en la tabla.
 
-### Dos escenarios del modelo
+### Un solo modelo, con lugar para más
 
-Producción y Financiero se pueden mirar en el escenario **1** —la versión
-base— o en el **2**, con menores producciones y menores costos. Los botones van
-numerados y la descripción de cada uno vive en su `nota`: aparece al pasar el
-cursor por el botón y encabeza el pie de la tabla comparativa, que es lo que
-hace falta cuando el rótulo es una cifra. No es un descuento
-porcentual aplicado sobre el otro: cada escenario es un libro completo, con su
-propia hoja *Consolidado*, sus propios supuestos y sus propias proyecciones, y
-los dos pasan por el mismo lector y los mismos chequeos.
+Producción y Financiero muestran **la última versión del modelo financiero**
+(`Financial_Model_Hacienda_Chada_v3.xlsx`). En plena producción (2028-2029) deja
+un EBITDA de **−US$ 93.775** sobre ingresos de US$ 5,91 M y costos de US$ 5,65 M.
 
-En plena producción (2028-2029), sobre el predio completo:
+La maquinaria para comparar dos modelos lado a lado sigue en pie pero apagada:
+la lista `ESCENARIOS` de `tools/modelo_to_json.py` tiene una sola entrada, y el
+mapa esconde el selector y la tabla comparativa cuando hay menos de dos. Para
+volver a comparar basta agregar ahí la entrada del otro libro —id, nombre,
+archivo de salida y nota— y correr el script; `index.html` no se toca.
 
-| | Escenario 1 | Escenario 2 | Δ |
-|---|---|---|---|
-| Producción | 5.585 t | 5.421 t | −2,9% |
-| Ingresos | US$ 6.769.429 | US$ 6.486.034 | −4,2% |
-| Costos | US$ 5.813.190 | US$ 5.747.986 | −1,1% |
-| EBITDA | US$ 605.560 | US$ 387.373 | **−36,0%** |
-| Margen s/ventas | 8,9% | 6,0% | −3,0 pp |
+### La superficie que muestra la ficha
 
-El apalancamiento es el punto: 4,2% menos de ingresos contra 1,1% menos de
-costos se traduce en 36% menos de EBITDA. Esa tabla está en el panel —*Comparar
-escenarios*— y se calcula **sobre las ramas que estén encendidas y la temporada
-que esté elegida**, no sobre el predio entero: filtrando a Cerezos se ve cuánto
-de la caída es de ahí. Cambiar de escenario, anotar un número y volver a cambiar
-es la forma lenta de leer eso.
+La ficha del cuartel da dos hectáreas y son cosas distintas:
 
-Tres decisiones que vale la pena dejar dichas:
+- **la del modelo**, que es la de la **variedad completa** —Candy Hearts son
+  16,30 ha repartidas en varios cuarteles—;
+- **la del paño**, `ha_kmz`, que es el área dibujada de **ese** polígono: el
+  cuartel 5174 mide 3,99 ha.
 
-- **El escenario no aparece en *Cosecha real*.** Lo que el campo dio no tiene
-  escenario 1 ni 2; ofrecer el control ahí insinuaría que el
-  pasado también se modela.
-- **Al cambiar de escenario no se rehacen la paleta, la leyenda ni el árbol de
-  especies.** Salen de las superficies, que son idénticas entre escenarios, y
-  rehacerlos borraría el filtro puesto en medio de una comparación.
-- **El extractor verifica que los escenarios describan el mismo campo** —mismas
-  variedades, mismas hectáreas, mismo horizonte— y se detiene si no. El mapa
-  dibuja una sola geometría y una sola leyenda para todos: si un escenario
-  agregara una variedad, al cambiar seguiría pintando el árbol del otro y los
-  totales dejarían de cuadrar sin que nada lo dijera.
+Antes sólo estaba la primera y se leía como si el paño que uno estaba tocando
+midiera las 16,30. La segunda va justo debajo, rotulada «ha dibujadas» y en
+gris, para que se vea que son dos cosas.
 
-El escenario activo se escribe en la cabecera del panel y al pie de la escala,
-junto a la temporada: son los dos ejes que definen de qué números se está
-hablando, y sin eso dos capturas del mismo predio serían indistinguibles. Ahí va
-como «Escenario 2» y no como «2» a secas: en la barra tiene encima el rótulo
-ESCENARIO que lo explica, pero al pie de una escala el número viaja solo.
-
-Cambiar los rótulos —a «Base» y «Ajustado», o a lo que sea— es editar el campo
-`nombre` en esa lista y volver a correr el extractor; el mapa los lee de ahí.
+`ha_kmz` es lo **único** que el mapa deriva del contorno del KMZ, y **no entra en
+ningún cálculo**: ni en totales, ni en promedios ponderados, ni en escalas de
+color, ni en repartos. La razón está a la vista: sumar los 174 paños da
+**330,81 ha** contra las 292,23 del modelo. Un contorno dibujado a mano no es
+una medición, y mezclarlo con la tasación descuadraría todo.
 
 ### Cajas o kilos, según lo que se esté mirando
 
@@ -425,8 +405,12 @@ encuadraba contra un ancho que en pantalla no existe y dejaba el tercio oriente
 Cuatro cosas que el cruce dejó a la vista. Ninguna se corrige en silencio: todas
 salen en el panel y, donde corresponde, en la ficha del cuartel.
 
-**0. La celda de rendimiento 25/26 de la vinífera trae un total, no un
-rendimiento.** En `Inputs Generales`, la columna *Rendimiento 25/26* de Cabernet
+**Los dos primeros ya están corregidos en el libro v3.** Se dejan escritos
+porque el control que los detectó sigue corriendo en cada actualización, y
+porque explican por qué existe.
+
+**0. La celda de rendimiento 25/26 de la vinífera traía un total, no un
+rendimiento** *(resuelto en v3)*. En `Inputs Generales`, la columna *Rendimiento 25/26* de Cabernet
 Sauvignon marca **46.622**, que es exactamente el total de kilos cosechados esa
 temporada según Fuente 2 —el rendimiento real es 1.225 kg/ha—. Cabernet Franc
 tiene el mismo problema: 3.987 contra 1.133. El modelo multiplica esa celda por
@@ -459,7 +443,8 @@ bloque de la hoja rotula distinto —la cereza por el año en que se cosecha, la
 de mesa por el año en que se embala—; el extractor lo verifica variedad por
 variedad y aborta si deja de calzar.
 
-**1. El bloque PRODUCCIÓN de Uva Vinífera está corrido una fila.** En
+**1. El bloque PRODUCCIÓN de Uva Vinífera estaba corrido una fila**
+*(resuelto en v3: el precio implicado ahora calza en las 20 temporadas)*. En
 `Consolidado por variedad`, la fila de Cabernet Franc lleva la producción de
 Cabernet Sauvignon, la de Sauvignon la de Carmenere, la de Carmenere la de Petit
 Verdot, y la de Petit Verdot carga el total de la especie. Sin corregir, el mapa
@@ -498,8 +483,7 @@ de los 174.
 ```
 index.html                      La aplicación completa: chrome, estilos y lógica.
 geo_data.json                   Geometría e identidad de cuartel. Derivado, no se edita.
-modelo_data.json                Escenario 1: superficie, producción, ingresos, costos, EBITDA.
-modelo_data_pesimista.json      Escenario 2, misma estructura.
+modelo_data.json                Superficie, producción, ingresos, costos y EBITDA.
 Hacienda Chada Huelquen.kmz     Fuente geográfica.
 tools/kml_to_geojson.py         KMZ → geo_data.json.
 tools/modelo_to_json.py         Modelos financieros → un JSON por escenario (y cruce al KMZ).
@@ -515,7 +499,7 @@ procedimiento son dos pasos.
 
 ```bash
 # 1. dejar el libro nuevo en su lugar, con el mismo nombre
-cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v1.xlsx
+cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v3.xlsx
 
 # 2. releer los modelos y volver a cruzarlos contra los cuarteles
 python tools/modelo_to_json.py
@@ -528,10 +512,8 @@ archivo y los rótulos viven en la lista `ESCENARIOS`, al principio de
 
 ```python
 ESCENARIOS = [
-    {"id": "1", "nombre": "1", "libro": "Financial_Model_Hacienda_Chada_v1.xlsx",
-     "salida": "modelo_data.json", "nota": "Versión base del modelo financiero."},
-    {"id": "2", "nombre": "2", "libro": "Financial_Model_Hacienda_Chada_vPesimista.xlsx",
-     "salida": "modelo_data_pesimista.json", "nota": "Menores producciones y menores costos."},
+    {"id": "v3", "nombre": "v3", "libro": "Financial_Model_Hacienda_Chada_v3.xlsx",
+     "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ]
 ```
 

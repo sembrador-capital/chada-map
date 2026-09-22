@@ -421,6 +421,10 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .card-v { color:var(--sem-ink); font-weight:500; text-align:right; font-variant-numeric:tabular-nums; }
 .card-v.neg { color:var(--neg-3); }
 .card-v.pos { color:var(--pos-4); }
+/* Contexto, no titular: el area dibujada del paño acompaña a la cifra del
+   modelo sin competir con ella. */
+.card-kv-sec { padding-bottom:2px; margin-bottom:1px; border-bottom:var(--sem-border-soft); }
+.card-kv-sec .card-k, .card-kv-sec .card-v { color:var(--sem-text-2); font-size:10px; font-weight:400; }
 .card-sec { border-top:var(--sem-border-soft); padding-top:7px; margin-top:2px; display:flex; flex-direction:column; gap:4px; }
 .card-sec-tit { font-size:9px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:var(--sem-text-3); }
 .card-chip { display:flex; justify-content:space-between; gap:8px; font-size:10.5px; padding:2px 6px; background:var(--sem-slate-wash); border-radius:var(--sem-radius); }
@@ -798,10 +802,16 @@ body.panel-abierto .data-stamp { right:408px; }
      modelo_data.json  superficie, producción, ingresos, costos y EBITDA
                        (derivado del modelo financiero)
 
-   La superficie SIEMPRE es la del modelo: 292,23 ha productivas. El KMZ no
-   aporta hectáreas y este archivo no las calcula: un polígono dibujado a mano
-   no es una medición, y mezclar las dos haría que los totales del mapa y los
-   del modelo no cuadren.
+   La superficie SIEMPRE es la del modelo: 292,23 ha productivas. Ningún total,
+   promedio ponderado, escala ni reparto usa el área del polígono: un contorno
+   dibujado a mano no es una medición, y sumar los 174 paños da 330,81 ha contra
+   las 292,23 del modelo.
+
+   La única excepción es de lectura, no de cálculo. La ficha del cuartel muestra
+   'ha_kmz' —el área dibujada de ESE paño— debajo de la del modelo, porque la
+   del modelo es la de la VARIEDAD completa: en el cuartel 5174 decía «16,30 ha»
+   y se leía como si ese paño midiera eso, cuando mide 3,99. Va rotulada como
+   «dibujadas» y en gris, y no entra en ninguna cuenta.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 mapboxgl.accessToken = 'pk.eyJ1Ijoicm9sYW5kb3BpbmEiLCJhIjoiY21ydTF0OWVlMDMwNjM2cHgwdTd4NGVzZSJ9.zvp3ej-YuJ1lEZ3HKtlSAw';
@@ -1090,8 +1100,18 @@ const etiquetaEscenario = () => {
    sea el activo. */
 const otroEscenario = () => ESCENARIOS.find(e => e.id !== escenario) || null;
 
-const escalaActiva = () => modo === 'produccion' ? UNIDAD.escala
-    : modo === 'suelos' ? ESCALAS[metricaSuelo] : ESCALAS[metrica];
+/* Nunca devuelve undefined. "clase" es la unica variable de suelo que no tiene
+   escala continua -es la simbologia del plano- y quien la pinta la ataja antes
+   de llegar aca; pero si subSuelo y metricaSuelo quedaran desacoplados, esto
+   devolvia undefined y el primer .cortes tumbaba el repintado entero. Cae a la
+   primera variable de la cara activa que si tenga escala. */
+const escalaActiva = () => {
+    if (modo === 'produccion') return UNIDAD.escala;
+    if (modo !== 'suelos') return ESCALAS[metrica];
+    return ESCALAS[metricaSuelo]
+        || ESCALAS[(METRICAS_SUELO[subSuelo] || []).find(m => ESCALAS[m])]
+        || ESCALAS.suelo_prof;
+};
 
 /* El terreno viene del DEM y el suelo del plano: los dos van escritos en el
    propio cuartel y no se ponderan ni se cruzan con el modelo. */
@@ -1561,6 +1581,15 @@ function mostrarFicha(p, punto, fija = false) {
     const kv = (k, v, cls = '') => `<div class="card-kv"><span class="card-k">${k}</span><span class="card-v${cls}">${v}</span></div>`;
     const chip = (a, b) => `<div class="card-chip"><span>${a}</span><span>${b}</span></div>`;
     const sec = (tit, html) => html ? `<div class="card-sec"><div class="card-sec-tit">${tit}</div>${html}</div>` : '';
+    /* Las hectáreas dibujadas de ESTE paño. Van siempre, haya o no contraparte
+       en el modelo: es lo único que describe al polígono que se está tocando.
+       Es una medición del dibujo del KMZ y no entra en ningún total -la suma de
+       los 174 paños da 330,81 ha contra las 292,23 del modelo-, así que va
+       rotulada como lo que es y en gris, para que nadie la confunda con la
+       superficie que manda. */
+    const kvKmz = p => p.ha_kmz == null ? ''
+        : `<div class="card-kv card-kv-sec"><span class="card-k">Este cuartel</span>` +
+          `<span class="card-v">${nf(p.ha_kmz, 2)} ha dibujadas</span></div>`;
 
     let cuerpo = '';
     const avisos = [];
@@ -1572,7 +1601,9 @@ function mostrarFicha(p, punto, fija = false) {
         // La tasación anota "-" donde no registró portainjerto: es un hueco.
         const patrones = pl ? [...new Set(pl.map(b => b.portainjerto).filter(x => x && x !== '-'))] : [];
         cuerpo =
-            (regs.length ? kv('Superficie', nf(ha, 2) + ' ha') : '') +
+            (regs.length ? kv(variedades.length > 1 ? 'Variedades del cuartel' : 'Variedad',
+                              nf(ha, 2) + ' ha en el modelo') : '') +
+            kvKmz(p) +
             (uno ? kv('Plantación', esc(uno.anio_plantacion || '—')) +
                    (patrones.length ? kv('Portainjerto', esc(patrones.join(', '))) : '') +
                    (pl ? kv('Marco', esc(pl[0].marco || '—')) : '') : '') +
@@ -1583,6 +1614,9 @@ function mostrarFicha(p, punto, fija = false) {
         if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
         if (p.aprox) avisos.push('Cruce aproximado: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
 
+        // En los demás modos el titular es otro -rendimiento, plata, suelo- y la
+        // superficie no compite con él; acá sí, porque Vista general es la
+        // pestaña de la identidad del cuartel.
     } else if (verCosecha()) {
         const conDato = regsConCosecha(regs, tc);
         const real = valorCosecha(p, tc);
@@ -1591,7 +1625,7 @@ function mostrarFicha(p, punto, fija = false) {
         // La unidad del cuartel, no la de la pantalla: ningún paño mezcla cajas
         // con kilos, así que su ficha siempre puede hablar en la del modelo.
         const f = factorDe(regs.length ? regs : conDato);
-        cuerpo = conDato.length
+        cuerpo = kvKmz(p) + (conDato.length
             ? kv('Cosechado', rend(real, f)) +
               kv('Total', miles(kg / f) + (f > 1 ? ' cajas' : ' kg')) +
               (meta ? kv('Plena producción', rend(meta, f)) +
@@ -1605,7 +1639,7 @@ function mostrarFicha(p, punto, fija = false) {
               (regs.length > 1 ? sec('Por variedad', conDato.map(v =>
                   chip(esc(v.variedad), rend(v.cosecha.rend_kg_ha[tc], v.kg_por_unidad || 1))).join('')) : '') +
               (f > 1 ? `<div class="card-suelo-desc">Cajas de 8,2 kg, que es como el modelo lleva la uva de mesa.</div>` : '')
-            : '';
+            : '');
         if (!conDato.length) avisos.push('Sin cosecha registrada en esta temporada.');
         const agr = conDato.filter(v => v.cosecha.agrupada);
         if (agr.length) avisos.push('<i>Fuente 2</i> mide juntas <b>' + esc(agr[0].cosecha.agrupada) +
@@ -1615,12 +1649,13 @@ function mostrarFicha(p, punto, fija = false) {
         }
 
     } else if (modo === 'produccion') {
+        cuerpo = kvKmz(p);
         const ultima = MOD.temporadas.length - 1;
         const f = factorDe(regs);
         const hoy = valorCuartel(p, 'rend_kg_ha', t), plena = valorCuartel(p, 'rend_kg_ha', ultima);
         // La fila de plena producción sólo aparece si dice algo distinto: en una
         // variedad ya adulta repetiría el mismo número dos veces.
-        cuerpo =
+        cuerpo +=
             kv('Rendimiento', rend(hoy, f)) +
             (Math.round(plena) !== Math.round(hoy) ? kv('En plena producción', rend(plena, f)) : '') +
             (f > 1 ? `<div class="card-suelo-desc">Cajas de 8,2 kg, que es como el modelo lleva la uva de mesa.</div>` : '') +
@@ -1637,7 +1672,7 @@ function mostrarFicha(p, punto, fija = false) {
             : { a: 'ingreso_ha', b: 'costo_ha', c: 'ebitda_ha' };
         const f = porKilo() ? usdkg : x => usd(x) + '/ha';
         const res = valorCuartel(p, campo.c, t), mg = valorCuartel(p, 'margen', t);
-        cuerpo = regs.length
+        cuerpo = kvKmz(p) + (regs.length
             ? kv('Ingresos', f(valorCuartel(p, campo.a, t))) +
               kv('Costos', f(valorCuartel(p, campo.b, t))) +
               kv(porKilo() ? 'Margen' : 'EBITDA', f(res), signo(res)) +
@@ -1645,11 +1680,11 @@ function mostrarFicha(p, punto, fija = false) {
               (porKilo() ? kv('Producción', miles(valorCuartel(p, 'rend_kg_ha', t)) + ' kg/ha') : '') +
               (regs.length > 1 ? sec('Por variedad', regs.map(v =>
                   chip(esc(v.variedad), f(v[campo.c][t]))).join('')) : '')
-            : '';
+            : '');
         if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
 
     } else if (verTerreno()) {
-        cuerpo =
+        cuerpo = kvKmz(p) +
             kv('Pendiente', nf(p.pendiente, 1) + '% · ' + esc(p.pendiente_clase)) +
             kv('Pendiente p90', nf(p.pendiente_p90, 1) + '%') +
             kv('Elevación', miles(p.elev) + ' m') +
@@ -1657,7 +1692,7 @@ function mostrarFicha(p, punto, fija = false) {
             kv('Exposición', esc(p.exposicion || '—'));
 
     } else if (verFisico()) {
-        cuerpo = su
+        cuerpo = kvKmz(p) + (su
             ? kv('Tipo', esc((SUELO[su.clase] || {}).nombre || su.clase)) +
               kv('Textura', esc(su.textura)) +
               kv('1er horizonte', miles(su.prof_cm) + ' cm') +
@@ -1668,7 +1703,7 @@ function mostrarFicha(p, punto, fija = false) {
                         chip(`<i class="lg-dot" style="display:inline-block;vertical-align:-1px;margin-right:5px;background:${(SUELO[m.clase] || {}).color}"></i>` +
                              esc((SUELO[m.clase] || {}).nombre || m.clase), pct(m.pct))).join(''))
                   : '')
-            : '';
+            : '');
         if (su && su.pct < 0.6) avisos.push('Cruza dos sectores sin que ninguno mande: la lectura buena es la mezcla, no el tipo dominante.');
     }
 
@@ -2363,7 +2398,7 @@ function pintarConciliacion() {
         const clase = r.ha < 0 ? 'resta' : (i === c.length - 1 ? 'total' : '');
         return `<tr class="${clase}"><td>${esc(r.concepto)}<br><span style="color:var(--sem-text-3);font-size:9.5px">${esc(r.nota)}</span></td><td>${nf(r.ha, 2)} ha</td></tr>`;
     }).join('');
-    $('concNota').innerHTML = 'Las 292,23 ha son la base de todo el modelo. El mapa nunca usa la superficie del polígono del KMZ: ' +
+    $('concNota').innerHTML = 'Las 292,23 ha son la base de todo el modelo. Ningún cálculo del mapa usa la superficie del polígono del KMZ —la ficha la muestra, rotulada, sólo para que se vea cuánto mide el paño que se está tocando—: ' +
         'un contorno dibujado no es una medición, y mezclarlo con la tasación descuadraría los totales.';
 
     const av = MOD.avisos, partes = [];

@@ -6,11 +6,21 @@ El nombre del placemark tiene la forma "<variedades> - <cuarteles>", separados p
 un guion largo. Cuando el cuartel es mixto, ambos lados traen varios valores
 separados por "/" y se mantienen en paralelo.
 
-El KMZ aporta geometria e identidad de cuartel, y nada mas: NO se emite ninguna
-superficie derivada del poligono. Las hectareas del predio son las del modelo
-financiero (292,23 ha productivas), que vienen de la ficha tecnica y la
-tasacion. El area del poligono se calcula solo para ponderar el centroide, que
-es donde se ancla la etiqueta del cuartel.
+El KMZ aporta geometria e identidad de cuartel. Las hectareas del PREDIO y de
+cada VARIEDAD son las del modelo financiero (292,23 ha productivas), que vienen
+de la ficha tecnica y la tasacion, y el KMZ no interviene en ellas.
+
+Se emite una sola superficie derivada del poligono, "ha_kmz", y es el area
+dibujada de ESE paño. Existe para responder una pregunta concreta de la ficha
+del cuartel: la superficie del modelo que se muestra ahi es la de la VARIEDAD
+completa -Candy Hearts son 16,30 ha repartidas en varios cuarteles-, y sin el
+area del paño se lee como si ese cuartel midiera las 16,30. Es contexto de
+lectura, no un dato del modelo.
+
+REGLA: ha_kmz no entra en ningun calculo. Ni en totales, ni en promedios
+ponderados, ni en escalas de color, ni en repartos. Un contorno dibujado a mano
+no es una medicion, y mezclarlo con la tasacion haria que los numeros del mapa y
+los del modelo dejaran de cuadrar. Solo se muestra, rotulado como lo que es.
 """
 import datetime
 import json
@@ -73,11 +83,21 @@ def ring_area_m2(ring, lat0):
     return abs(acc) / 2.0
 
 
-def centroide(polys):
-    """Centroide ponderado por el area de cada poligono.
+def area_ha(polys):
+    """Hectareas dibujadas del paño: anillo exterior menos los interiores.
 
-    El area se usa solo como peso: no sale de esta funcion ni llega al JSON.
+    Es una medicion del DIBUJO, no del terreno. Ver la regla del encabezado:
+    esto se muestra y no se suma.
     """
+    lats = [pt[1] for rings in polys for ring in rings for pt in ring]
+    lat0 = sum(lats) / len(lats)
+    m2 = sum(ring_area_m2(rings[0], lat0) - sum(ring_area_m2(r, lat0) for r in rings[1:])
+             for rings in polys)
+    return round(m2 / 10000.0, 2)
+
+
+def centroide(polys):
+    """Centroide ponderado por el area de cada poligono."""
     lats = [pt[1] for rings in polys for ring in rings for pt in ring]
     lat0 = sum(lats) / len(lats)
     area = 0.0
@@ -170,6 +190,9 @@ def main():
                         "mixto": len(variedades) > 1,
                         "nota": nota,
                         "centro": centro,
+                        # Area dibujada de este paño. Se muestra en la ficha
+                        # junto a la superficie de la variedad; no se suma.
+                        "ha_kmz": area_ha(polys),
                     },
                     "geometry": {
                         "type": "MultiPolygon" if len(polys) > 1 else "Polygon",

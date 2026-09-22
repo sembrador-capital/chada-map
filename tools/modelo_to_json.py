@@ -49,17 +49,17 @@ LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 # El mapa lee esta misma lista desde los JSON generados, asi que no hay que
 # tocar index.html.
 ESCENARIOS = [
-    {"id": "1", "nombre": "1",
-     "libro": "Financial_Model_Hacienda_Chada_v1.xlsx",
+    {"id": "v3", "nombre": "v3",
+     "libro": "Financial_Model_Hacienda_Chada_v3.xlsx",
      "salida": "modelo_data.json",
      # La nota es texto de pantalla, no comentario: va con tildes como todo lo
      # que termina a la vista del usuario.
-     "nota": "Versión base del modelo financiero."},
-    {"id": "2", "nombre": "2",
-     "libro": "Financial_Model_Hacienda_Chada_vPesimista.xlsx",
-     "salida": "modelo_data_pesimista.json",
-     "nota": "Menores producciones y menores costos."},
+     "nota": "Ultima version del modelo financiero."},
 ]
+# Con un solo escenario el mapa no muestra el selector ni la tabla comparativa:
+# los esconde cuando la lista trae menos de dos. Para volver a comparar basta
+# agregar aca la entrada del otro libro -id, nombre, archivo de salida y nota- y
+# correr el script; no hay que tocar index.html.
 
 # La consola de Windows sale en cp1252 y revienta con cualquier caracter fuera
 # de esa tabla. El JSON ya estaba escrito cuando eso pasaba, asi que el script
@@ -827,15 +827,21 @@ def procesar(esc, escribir_geo):
         reg["costo_ha"] = [None if not reg["ha"] else round(c / reg["ha"], 1) for c in reg["costos"]]
         reg["ingreso_ha"] = [None if not reg["ha"] else round(i / reg["ha"], 1) for i in reg["ingresos"]]
         # ── Control de coherencia de la produccion ────────────────────────
-        # El bloque PRODUCCION del libro trae corridas las cuatro filas de Uva
-        # Vinifera: la fila de Cabernet Franc lleva el valor de Cabernet
-        # Sauvignon, la de Sauvignon el de Carmenere, la de Carmenere el de
-        # Petit Verdot, y la de Petit Verdot el total de la especie. Ingresos,
-        # costos y EBITDA estan bien -cuadran con ha x rendimiento de Inputs
-        # Generales-, asi que el error es solo de ese bloque y no contamina la
-        # plata. Se detecta despejando la produccion desde los ingresos y el
-        # precio efectivo; donde no cuadra, el mapa usa la serie despejada y la
-        # ficha lo dice. No se corrige el libro en silencio.
+        # Este control nacio por un error del libro v1: el bloque PRODUCCION
+        # traia corridas una fila las cuatro variedades de Uva Vinifera, de modo
+        # que cada una llevaba la produccion de la siguiente. Se detecta
+        # despejando la produccion desde los ingresos y el precio efectivo.
+        #
+        # La prueba es POR TEMPORADA y gana la mayoria, no la primera. Una fila
+        # corrida no calza en NINGUNA temporada -lleva la serie de otra
+        # variedad-, mientras que un libro que usa el precio realmente obtenido
+        # en la temporada en curso y el precio modelado de ahi en adelante no
+        # calza en UNA sola. Mirando solo la primera temporada, como se hacia
+        # antes, las dos cosas se ven iguales: en v3 eso marcaba como rotas
+        # siete variedades de Uva de Mesa que estaban bien y les reemplazaba la
+        # produccion 25/26 real por una despejada de un precio que no era el de
+        # esa temporada. Peor que no avisar: corregir lo que estaba bien.
+        #
         # reg.get y no reg[...]: una variedad agregada al Consolidado pero no a
         # la tabla de supuestos llega hasta aca sin estos campos, y reventar con
         # un KeyError no le dice a nadie que le falta una fila en otra hoja. Se
@@ -846,10 +852,20 @@ def procesar(esc, escribir_geo):
         precio = (reg.get("precio_export") or 0) * px             + (reg.get("precio_interno_clp") or 0) / supuestos["tipo_cambio"] * (1 - px)
         reg["precio_efectivo"] = round(precio, 4) if precio else None
         implicita = [None if not precio else round(i / precio) for i in reg["ingresos"]]
-        ref = next((k for k in range(N_TEMPORADAS) if implicita[k]), None)
-        reg["produccion_coherente"] = (
-            ref is None or abs(reg["produccion"][ref] - implicita[ref]) <= 0.02 * implicita[ref])
-        if not reg["produccion_coherente"]:
+
+        # Temporadas con con que comparar: hace falta produccion e ingresos.
+        comparables = [k for k in range(N_TEMPORADAS)
+                       if precio and reg["produccion"][k] and reg["ingresos"][k]]
+        fuera = [k for k in comparables
+                 if abs(reg["ingresos"][k] / reg["produccion"][k] - precio) > 0.02 * precio]
+        reg["produccion_coherente"] = len(fuera) * 2 <= len(comparables)
+        if reg["produccion_coherente"]:
+            # Las temporadas sueltas con otro precio no se tocan: son dato del
+            # libro. Se anotan para poder explicarlas si alguien pregunta por
+            # que el ingreso por kilo de esa temporada no es el del modelo.
+            reg["temporadas_otro_precio"] = [temporadas[k] for k in fuera]
+        else:
+            reg["temporadas_otro_precio"] = []
             reg["produccion_libro"] = reg["produccion"]
             reg["produccion"] = implicita
 
@@ -1019,6 +1035,9 @@ def procesar(esc, escribir_geo):
             "produccion_incoherente": sorted(
                 "%s / %s" % (r["especie"], r["variedad"])
                 for r in variedades.values() if not r["produccion_coherente"]),
+            "precio_distinto": sorted(
+                "%s / %s (%s)" % (r["especie"], r["variedad"], ", ".join(r["temporadas_otro_precio"]))
+                for r in variedades.values() if r.get("temporadas_otro_precio")),
             "variedades_sin_cuartel": sorted(r["variedad"] for r in variedades.values() if not r["cuarteles"]),
             "cuarteles_sin_modelo": sorted(set(sin_modelo)),
             "ha_detalle_plantaciones": ha_tasacion,
