@@ -49,12 +49,12 @@ LIBRO = RAIZ / "datos_fuente" / "Financial_Model_Hacienda_Chada_v1.xlsx"
 # El mapa lee esta misma lista desde los JSON generados, asi que no hay que
 # tocar index.html.
 ESCENARIOS = [
-    {"id": "v7", "nombre": "v7",
-     "libro": "Financial_Model_Hacienda_Chada_v7.xlsx",
+    {"id": "v8", "nombre": "v8",
+     "libro": "Financial_Model_Hacienda_Chada_v8.xlsx",
      "salida": "modelo_data.json",
      # La nota es texto de pantalla, no comentario: va con tildes como todo lo
      # que termina a la vista del usuario.
-     "nota": "Ultima version del modelo financiero."},
+     "nota": "Última versión del modelo financiero."},
 ]
 # Con un solo escenario el mapa no muestra el selector ni la tabla comparativa:
 # los esconde cuando la lista trae menos de dos. Para volver a comparar basta
@@ -207,7 +207,12 @@ CAB_CONSOLIDADO = {
     "ebitda_ha": "EBITDA/ha",
 }
 FIN_SUPERFICIE = "TOTAL SUPERFICIE MODELADA"
-COL_TEMPORADA_0 = 4          # columna D: la primera temporada
+# La primera temporada ya no tiene columna fija: v1-v7 la traian en D y v8
+# inserto tres columnas vacias entre la variedad y las temporadas, que pasaron a
+# empezar en F. Se busca en la cabecera de PRODUCCION la primera celda con forma
+# de temporada ("2025-2026", "2031-2032E") y se exige que los demas bloques la
+# tengan en la misma columna con las mismas etiquetas.
+TEMPORADA_RE = re.compile(r"^\s*\d{4}\s*-\s*\d{4}\s*E?\s*$")
 
 
 def fila_de(filas, texto, col=0, desde=0):
@@ -239,17 +244,30 @@ def leer_consolidado(ws):
     i_prod = exigir(fila_de(filas, CAB_CONSOLIDADO["produccion"]), CAB_CONSOLIDADO["produccion"],
                     "Consolidado por variedad")
     cabecera = filas[i_prod]
-    temporadas = []
-    for j in range(COL_TEMPORADA_0 - 1, len(cabecera)):
-        if cabecera[j] in (None, ""):
-            break
-        temporadas.append(cabecera[j])
-    if not temporadas:
+    col0 = next((j for j, v in enumerate(cabecera) if v is not None and TEMPORADA_RE.match(str(v))), None)
+    if col0 is None:
         sys.exit("La fila de '%s' no trae temporadas a la derecha" % CAB_CONSOLIDADO["produccion"])
+    temporadas = []
+    for j in range(col0, len(cabecera)):
+        if cabecera[j] in (None, "") or not TEMPORADA_RE.match(str(cabecera[j])):
+            break
+        temporadas.append(str(cabecera[j]).strip())
 
     inicios = {"superficie": i_cab + 1}
     for bloque, titulo in CAB_CONSOLIDADO.items():
-        inicios[bloque] = exigir(fila_de(filas, titulo), titulo, "Consolidado por variedad") + 1
+        i_blq = exigir(fila_de(filas, titulo), titulo, "Consolidado por variedad")
+        inicios[bloque] = i_blq + 1
+        # Cada bloque tiene que traer las mismas temporadas en las mismas
+        # columnas que PRODUCCION: si alguien corre un bloque y no los otros, se
+        # leerian ingresos de una temporada contra produccion de otra.
+        propias = [str(filas[i_blq][col0 + k] or "").strip() for k in range(len(temporadas))]
+        if propias != temporadas:
+            sys.exit(
+                "El bloque '%s' no tiene las temporadas en las mismas columnas que '%s'.\n"
+                "  %s: %s...\n  %s: %s...\n"
+                "Hay que alinear las columnas de los bloques del Consolidado."
+                % (titulo, CAB_CONSOLIDADO["produccion"], CAB_CONSOLIDADO["produccion"],
+                   temporadas[:3], titulo, propias[:3]))
 
     datos = {}
     vacias = 0
@@ -273,7 +291,7 @@ def leer_consolidado(ws):
                     "Las variedades tienen que ir en el mismo orden en los seis bloques."
                     % (bloque, inicios[bloque] + i + 1, especie, variedad, fila[0], fila[1]))
             nd = 0 if bloque in ("produccion", "ingresos", "costos", "ebitda") else 1
-            valores = [num(fila[COL_TEMPORADA_0 - 1 + k], nd) for k in range(len(temporadas))]
+            valores = [num(fila[col0 + k], nd) for k in range(len(temporadas))]
             # Los costos vienen negativos en el libro; se guardan en positivo y
             # el signo queda en el nombre del campo, no en el dato.
             if bloque == "costos":
@@ -331,14 +349,21 @@ CAMPOS_VARIEDAD = [
     ("rend_27_28", "K", 0, "Rendimiento 27-28"),
     ("rend_28_29", "L", 0, "Rendimiento 28-29"),
     ("rend_plena", "M", 0, "Rendimiento plena prod"),
-    ("precio_export", "N", 2, "Precio exportacion"),
+    # "Precio exportacion (US$" y no "Precio exportacion" a secas: desde v5
+    # hay escalones "Precio exportacion 27-28->" al lado, que tambien lo
+    # contienen, y el resolutor podria tomar uno por otro.
+    ("precio_export", "N", 2, "Precio exportacion (US$"),
     ("precio_interno_clp", "O", 0, "Precio mercado interno"),
-    ("pct_export", "P", 3, "Exportacion"),
+    # "% produccion" y no "Exportacion": en v8 la columna que cae justo en la
+    # letra esperada es "Precio exportacion 28-29->", que tambien dice
+    # "exportacion", y se habria leido un precio como porcentaje exportado.
+    ("pct_export", "P", 3, "% produccion"),
     ("costo_fijo_ha", "Q", 0, "Costo fijo de produccion"),
     ("costo_cosecha_kg", "R", 3, "Costo de cosecha"),
     ("proceso_kg", "S", 3, "Proceso y embalaje"),
     ("otros_var_kg", "T", 3, "Otros costos variables"),
-    ("gav_ha", "U", 0, "GAV"),
+    # v8 renombro "GAV" a "SG&A": es el mismo gasto por hectarea.
+    ("gav_ha", "U", 0, ("GAV", "SG&A")),
     ("capex_pct", "V", 3, "CapEx recurrente"),
 ]
 
@@ -351,14 +376,16 @@ CAMPOS_VARIEDAD = [
 # y una ventana chica lo sigue sin adivinar mas alla. Si nada calza ni cerca,
 # no hay ambiguedad que resolver: se avisa y se para.
 def col_con_encabezado(cabecera, idx, letra_base, objetivo, ventana=4):
+    # 'objetivo' puede ser un rotulo o una tupla de alternativas, para cuando el
+    # libro renombra una columna sin cambiar lo que significa.
     base = idx(letra_base)
-    buscado = norm(objetivo)
+    buscados = [norm(o) for o in (objetivo if isinstance(objetivo, tuple) else (objetivo,))]
     deltas = [0] + [d for paso in range(1, ventana + 1) for d in (paso, -paso)]
     for delta in deltas:
         i = base + delta
         if 0 <= i < len(cabecera):
             texto = norm(" ".join(str(cabecera[i] or "").split()))
-            if buscado in texto:
+            if any(b in texto for b in buscados):
                 return i
     return None
 
@@ -399,7 +426,8 @@ def leer_inputs(ws):
                 "tabla de supuestos de Inputs Generales. En %s dice '%s'.\n"
                 "Parece que se insertaron o borraron mas columnas de las que este\n"
                 "script sabe seguir: revisa la hoja antes de seguir."
-                % (esperado, letra, letra, cabecera[idx(letra)]))
+                % (esperado if isinstance(esperado, str) else " / ".join(esperado),
+                   letra, letra, cabecera[idx(letra)]))
         columnas[nombre] = i
 
     # Precio de exportacion con corte de temporada, agregado en v5: rige desde
@@ -409,15 +437,19 @@ def leer_inputs(ws):
     # rango de dos anos en el encabezado (hoy "27-28"), no por su posicion: el
     # propio rango dice desde que temporada aplica, asi que si el corte se
     # mueve a otro ano el script lo sigue sin que haya que tocarlo.
-    col_tardio = col_con_encabezado(cabecera, idx, "O", "exportacion")
-    corte_tardio = None
-    if col_tardio is not None:
-        texto_tardio = str(cabecera[col_tardio] or "")
-        m = re.search(r"(\d{2})\s*-\s*(\d{2})", texto_tardio)
+    # v8 sumo un segundo escalon ("28-29->"), asi que ya no es UN precio tardio
+    # sino una escalera: se juntan todas las columnas de precio de exportacion
+    # que traen un rango de temporada en el encabezado, cada una con su corte.
+    escalones = []
+    for j, v in enumerate(cabecera):
+        texto = norm(" ".join(str(v or "").split()))
+        if "exportacion" not in texto:
+            continue
+        m = re.search(r"(\d{2})\s*-\s*(\d{2})", texto)
         if m:
-            corte_tardio = "20%s-20%s" % (m.group(1), m.group(2))
-        else:
-            col_tardio = None  # trae "exportacion" pero no un rango: no es esta columna
+            escalones.append(("20%s-20%s" % (m.group(1), m.group(2)), j))
+    escalones.sort()
+    cortes = [c for c, _ in escalones]
 
     por_variedad = {}
     for f in filas[i_cab + 1:]:
@@ -428,9 +460,11 @@ def leer_inputs(ws):
         for nombre, letra, nd, _ in CAMPOS_VARIEDAD:
             v = f[columnas[nombre]]
             reg[nombre] = v if nd is None else num(v, nd)
-        reg["precio_export_tardio"] = num(f[col_tardio], 2) if col_tardio is not None else None
+        # [[corte, precio], ...] solo con los escalones que esta variedad trae.
+        reg["precios_export_escalones"] = [[c, num(f[j], 2)] for c, j in escalones
+                                           if num(f[j], 2) is not None]
         por_variedad[clave_modelo(especie, variedad)] = reg
-    return supuestos, por_variedad, corte_tardio
+    return supuestos, por_variedad, cortes
 
 
 # El modelo separa por manejo e injerto lo que la tasacion anota como una sola
@@ -883,16 +917,13 @@ def procesar(esc, escribir_geo):
     # El largo lo manda el libro, no una constante: si el modelo cambia de
     # horizonte, el JSON lo sigue sin que nadie tenga que tocar el script.
     N_TEMPORADAS = len(temporadas)
-    supuestos, inputs_var, corte_precio_tardio = leer_inputs(wb["Inputs Generales"])
-    # A que indice de temporada corresponde el corte del precio tardio -si el
-    # libro trae uno-. Se busca por el nombre de la temporada, no se calcula a
-    # partir del horizonte: si alguna temporada trae la "E" de estimada al
-    # final (las de mas adelante la tienen) el corte real no la tiene, asi que
-    # se compara sin ese sufijo.
-    idx_corte_tardio = None
-    if corte_precio_tardio:
-        idx_corte_tardio = next(
-            (k for k, t in enumerate(temporadas) if t.rstrip("E") == corte_precio_tardio), None)
+    supuestos, inputs_var, cortes_precio = leer_inputs(wb["Inputs Generales"])
+    # A que indice de temporada corresponde cada escalon de precio. Se busca por
+    # el nombre de la temporada, no se calcula a partir del horizonte: si alguna
+    # temporada trae la "E" de estimada al final (las de mas adelante la tienen)
+    # el corte no la tiene, asi que se compara sin ese sufijo.
+    idx_cortes = {c: next((k for k, t in enumerate(temporadas) if t.rstrip("E") == c), None)
+                  for c in cortes_precio}
     plantaciones, ha_tasacion = leer_plantaciones(wb["Detalle Plantaciones"])
     base = leer_base(wb["Base Chada"])
     fuente2 = leer_fuente2(wb["Fuente 2 Rendimientos"])
@@ -952,16 +983,19 @@ def procesar(esc, escribir_geo):
         # precio) el comportamiento no cambia en nada.
         reg["precio_efectivo"] = round(precio, 4) if precio else None
 
-        # El precio con que se compara cada temporada. Si esta variedad tiene
-        # un precio de exportacion tardio, rige desde el indice del corte en
-        # adelante; si no, es el mismo precio en las 21 temporadas, como era
-        # antes de que existiera esta columna.
-        tardio_val = reg.get("precio_export_tardio")
-        if tardio_val is not None and idx_corte_tardio is not None:
-            precio_tardio = tardio_val * px + interno * (1 - px)
-            precios = [precio_tardio if k >= idx_corte_tardio else precio for k in range(N_TEMPORADAS)]
-        else:
-            precios = [precio] * N_TEMPORADAS
+        # El precio con que se compara cada temporada: el de exportacion de
+        # siempre hasta el primer escalon, y desde cada corte el de ese escalon.
+        # Sin escalones es el mismo precio en todas las temporadas, como era
+        # antes de que existieran estas columnas.
+        pasos = sorted((idx_cortes[c], v) for c, v in (reg.get("precios_export_escalones") or [])
+                       if idx_cortes.get(c) is not None)
+        precios = []
+        for k in range(N_TEMPORADAS):
+            pe = reg.get("precio_export") or 0
+            for i_c, v in pasos:
+                if k >= i_c:
+                    pe = v
+            precios.append(pe * px + interno * (1 - px))
 
         implicita = [None if not precios[k] else round(reg["ingresos"][k] / precios[k])
                     for k in range(N_TEMPORADAS)]

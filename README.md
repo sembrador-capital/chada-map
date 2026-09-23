@@ -208,12 +208,22 @@ Dos detalles de la fuente, ambos visibles en el mapa:
 ### Un solo modelo, con lugar para más
 
 Producción y Financiero muestran **la última versión del modelo financiero**
-(`Financial_Model_Hacienda_Chada_v7.xlsx`). En plena producción (2028-2029) deja
-un EBITDA de **+US$ 938.630** sobre ingresos de US$ 6,83 M y costos de US$ 5,55 M.
-v7 subió la producción de ciruela (Candy Red, Red Phoenix y Sweet Mary) desde
-2026-2027 en adelante —unos 15% más de kilos—, que agregan ~US$ 22 mil de EBITDA
-en plena producción sobre v6 (+US$ 916.776). Los precios de la uva no se movieron
-respecto de v6. El resto de la historia: v3 cerraba en −US$ 93.775, v4 en
+(`Financial_Model_Hacienda_Chada_v8.xlsx`). En plena producción (2028-2029) deja
+un EBITDA de **+US$ 982.907** sobre ingresos de US$ 6,85 M y costos de US$ 5,55 M.
+v8 no toca la producción; mueve tres cosas:
+
+- el **GAV pasa a llamarse SG&A** y baja de 1.200 a **1.097 US$/ha** en las 33
+  variedades, unos US$ 29 mil más de EBITDA por temporada;
+- un **segundo escalón de precio de exportación, desde 2028-2029**, para ocho
+  variedades de cerezo (Cheery Treat e injerto, Nimba, Pacific Red, Royal Dawn,
+  Santina, Santina Macro Túnel y Sweet Aryana);
+- **Candy Hearts** baja su precio de exportación desde 2027-2028 de 9,84 a 9,50.
+
+En plena producción queda en +US$ 44 mil sobre v7 (+US$ 938.630). En 2027-2028,
+donde todavía no rige el escalón de los cerezos, gana solo +US$ 17 mil: el ahorro
+en SG&A menos lo que se pierde en Candy Hearts. v7 había subido la producción de
+ciruela (Candy Red, Red Phoenix y Sweet Mary) sobre v6 (+US$ 916.776). El resto
+de la historia: v3 cerraba en −US$ 93.775, v4 en
 +US$ 111.833, v4→v5 sumó casi todo el EBITDA (ingresos +12,5% con costos planos)
 por el precio de exportación escalonado —ver el hallazgo más abajo—, y v6 sacó
 dos cuarteles arrendados, bajando la superficie a 284,02 ha.
@@ -228,16 +238,21 @@ archivo de salida y nota— y correr el script; `index.html` no se toca.
 
 Financiero y Producción traen un filtro por signo del EBITDA: **Todas ·
 EBITDA + · EBITDA −**. En plena producción (2028-2029) las variedades con
-EBITDA/ha positivo suman **193,47 ha de las 284,02**, el 68% del predio,
-repartidas en 59 de los 174 paños. El resto —90,55 ha— pierde plata. Las dos
+EBITDA/ha positivo suman **180,97 ha de las 284,02**, el 64% del predio,
+repartidas en 55 de los 174 paños. El resto —103,05 ha— pierde plata. Las dos
 mitades suman exactamente el predio, que es la comprobación de que nada se
 pierde ni se cuenta dos veces.
 
 El signo cambia con la temporada, así que el filtro se vuelve a evaluar al
-cambiarla: 68,03 ha en 2025-2026, 141,51 en 2026-2027, **190,23** en 2027-2028 y
-193,47 de ahí en adelante. El salto de 2026-2027 a 2027-2028 —de 142 a 190 ha—
+cambiarla: 68,03 ha en 2025-2026, 141,51 en 2026-2027, **177,73** en 2027-2028 y
+180,97 de ahí en adelante. El salto de 2026-2027 a 2027-2028 —de 142 a 178 ha—
 es el precio de exportación escalonado que el modelo aplica a la Uva de Mesa
-desde 2027-2028: varias variedades cruzan a rentables ahí.
+desde 2027-2028: varias variedades cruzan a rentables ahí. Con v8 **Candy
+Hearts cruza al revés**: con el precio más bajo pasa de +169 a −666 US$/ha en
+plena producción, y sus 12,50 ha son justo lo que el lado positivo bajó respecto
+de v7 (193,47). Los cerezos del escalón 2028-2029 mejoran entre 500 y 1.050
+US$/ha, pero ninguno cambia de signo: Cheery Treat Injerto y Santina Macro Túnel
+ya eran positivos, y el resto sigue en rojo.
 
 **El filtro es por variedad del modelo, no por rama de la leyenda.** Es la
 diferencia entre que el total cuadre y que no: el número que se quiere
@@ -248,8 +263,8 @@ rama en vez de por variedad, esas hectáreas se perdían y el total no cuadraba
 con la tabla del modelo.
 
 Como el tamiz es por variedad y el mapa pinta paños, hay **cinco cuarteles que
-llevan variedades de los dos signos** —`8201 / 8202-A` tiene Lapins (+2.055
-US$/ha) y Royal Dawn (−5.092)—. El paño es uno solo y no se puede partir:
+llevan variedades de los dos signos** —`8201 / 8202-A` tiene Lapins (+2.158
+US$/ha) y Royal Dawn (−4.314)—. El paño es uno solo y no se puede partir:
 aparece, porque tiene algo que mostrar, y se pinta con el valor del cuartel
 completo, que puede salir rojo dentro de un filtro de positivos. La ficha de
 esos cinco lo dice con nombre y apellido.
@@ -262,9 +277,9 @@ ellos.
 El control está en **Financiero y en Producción** —las dos pestañas donde la
 pregunta tiene sentido— y lo que deja puesto vale en todas: filtrar y pasar a
 Suelos muestra qué suelo tienen justamente los paños que ganan plata. El cruce
-más útil es con *Cosecha real*: las 193,5 ha rentables cosecharon 17.330 kg/ha
-en 2025/26 contra los 24.451 que el modelo les pide en plena producción, un
-**70,9%** —prácticamente lo mismo que el 72,4% del predio completo—. Con v3, las
+más útil es con *Cosecha real*: las 181,0 ha rentables cosecharon 17.794 kg/ha
+en 2025/26 contra los 24.404 que el modelo les pide en plena producción, un
+**72,9%** —prácticamente lo mismo que el 72,4% del predio completo—. Con v3, las
 130,5 ha rentables de entonces estaban bastante más cerca de su meta que el
 predio (82,7% contra 71,9%); desde v4 esa ventaja desaparece, porque el conjunto
 de variedades rentables se ensanchó y ya no es sólo el núcleo más eficiente.
@@ -516,6 +531,26 @@ recalcula, así que el recorte tiene que alcanzar a todos los bloques por
 temporada, no solo a producción/ingresos/costos/EBITDA; si no, el año recortado
 deja `EBITDA/ha` corrido y el filtro +/− mira la temporada equivocada.
 
+**0f. v8 corrió el Consolidado tres columnas y renombró el GAV.** El
+Consolidado de v8 trae tres columnas vacías antes de la primera temporada, y el
+lector buscaba las temporadas en una columna fija. Se detuvo solo con *"La fila
+de 'PRODUCCIÓN TOTAL' no trae temporadas"*, en vez de leer ceros. Ahora la
+primera temporada se ubica por su forma («2025-2026», con o sin la E de
+estimado) y no por su columna. Además, cada bloque —producción, ingresos,
+costos, EBITDA, EBITDA/ha…— tiene que traer exactamente las mismas temporadas en
+el mismo lugar, y si no, el script para: un bloque corrido respecto de otro
+pintaría el EBITDA de un año con los kilos de otro.
+
+En `Inputs Generales` el mismo libro cambió dos rótulos. *GAV* pasó a llamarse
+*SG&A*, y el lector acepta los dos nombres. También sumó una segunda columna de
+precio, *Precio exportación 28-29→*, cuyo encabezado se parecía lo suficiente a
+«% exportación» como para que la búsqueda por encabezado pudiera confundirlos;
+los rótulos esperados se hicieron más específicos. Los escalones de precio ya no
+son uno fijo: el lector toma todas las columnas «Precio exportación AA-AA→» que
+encuentre, en orden, y el chequeo de coherencia usa en cada temporada el último
+escalón vigente. Con eso las 21 temporadas de las 33 variedades calzan precio
+por kilos con ingreso, sin ninguna marcada como incoherente.
+
 **0. La celda de rendimiento 25/26 de la vinífera traía un total, no un
 rendimiento** *(resuelto en v3)*. En `Inputs Generales`, la columna *Rendimiento 25/26* de Cabernet
 Sauvignon marca **46.622**, que es exactamente el total de kilos cosechados esa
@@ -607,12 +642,12 @@ en el nombre. El procedimiento son tres pasos.
 
 ```bash
 # 1. dejar el libro nuevo en datos_fuente/, con su propio nombre versionado
-cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v7.xlsx
+cp "<el archivo que llegó>.xlsx" datos_fuente/Financial_Model_Hacienda_Chada_v8.xlsx
 ```
 
 ```python
 # 2. apuntar ESCENARIOS al archivo nuevo, en tools/modelo_to_json.py
-{"id": "v7", "nombre": "v7", "libro": "Financial_Model_Hacienda_Chada_v7.xlsx",
+{"id": "v8", "nombre": "v8", "libro": "Financial_Model_Hacienda_Chada_v8.xlsx",
  "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ```
 
@@ -631,7 +666,7 @@ archivo y los rótulos viven en la lista `ESCENARIOS`, al principio de
 
 ```python
 ESCENARIOS = [
-    {"id": "v7", "nombre": "v7", "libro": "Financial_Model_Hacienda_Chada_v7.xlsx",
+    {"id": "v8", "nombre": "v8", "libro": "Financial_Model_Hacienda_Chada_v8.xlsx",
      "salida": "modelo_data.json", "nota": "Última versión del modelo financiero."},
 ]
 ```
