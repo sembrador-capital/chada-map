@@ -21,6 +21,13 @@ REGLA: ha_kmz no entra en ningun calculo. Ni en totales, ni en promedios
 ponderados, ni en escalas de color, ni en repartos. Un contorno dibujado a mano
 no es una medicion, y mezclarlo con la tasacion haria que los numeros del mapa y
 los del modelo dejaran de cuadrar. Solo se muestra, rotulado como lo que es.
+
+Los POZOS vienen en su propia carpeta, como puntos. No son cuarteles ni tienen
+superficie, asi que no pasan por nada de lo anterior: salen aparte, en
+"pozos", con lo que dice su nombre -numero, caudal si lo anota, y si esta seco
+o sin uso-. El encuadre del mapa sigue siendo el de los cuarteles: el pozo
+Cardonal queda unos 700 m al noroeste del predio y agrandar la caja para
+incluirlo achicaria todo lo demas.
 """
 import datetime
 import json
@@ -138,6 +145,26 @@ def split_name(name, folder_variedad):
     return variedades, cuarteles, nota
 
 
+def punto(placemark):
+    node = placemark.find(".//" + KML_NS + "Point/" + KML_NS + "coordinates")
+    if node is None or not node.text:
+        return None
+    lon, lat = node.text.strip().split(",")[:2]
+    return [round(float(lon), 7), round(float(lat), 7)]
+
+
+def leer_pozo(nombre):
+    """Lo que el nombre del pozo dice de el. No se inventa lo que no dice."""
+    n = re.search(r"N\s*[º°o]\s*(\d+)", nombre, re.I)
+    caudal = re.search(r"(\d+(?:[.,]\d+)?)\s*l(?:ts?)?\s*/\s*s", nombre, re.I)
+    sin_uso = bool(re.search(r"\bseco\b|\bsin\s+uso\b", nombre, re.I))
+    return {
+        "numero": int(n.group(1)) if n else None,
+        "caudal_ls": float(caudal.group(1).replace(",", ".")) if caudal else None,
+        "en_uso": not sin_uso,
+    }
+
+
 def rings_of(feature):
     geom = feature["geometry"]
     polys = [geom["coordinates"]] if geom["type"] == "Polygon" else geom["coordinates"]
@@ -155,6 +182,7 @@ def main():
         doc = ET.fromstring(z.read(kml_name))
 
     features = []
+    pozos = []
     seq = [0]
 
     def walk(node, especie, variedad):
@@ -171,6 +199,16 @@ def main():
             elif t == "Placemark":
                 polys = polygons(el)
                 if not polys:
+                    pt = punto(el)
+                    if pt:
+                        nombre = child_text(el, "name")
+                        pozos.append({
+                            "type": "Feature",
+                            "id": len(pozos) + 1,
+                            "properties": {"pid": "P%02d" % (len(pozos) + 1),
+                                           "nombre": nombre, **leer_pozo(nombre)},
+                            "geometry": {"type": "Point", "coordinates": pt},
+                        })
                     continue
                 seq[0] += 1
                 nombre = child_text(el, "name")
@@ -223,8 +261,8 @@ def main():
         resumen.append(esp)
 
     # Codigos de cuartel que aparecen en mas de un poligono. No siempre es un
-    # error -8201 y 8209 vienen partidos en A y B a proposito-, pero 5137, 5127
-    # y 5213 son tres paños distintos compartiendo rotulo, y eso hace que el
+    # error -8201 y 8209 vienen partidos en A y B a proposito-, pero 5127 y 5213
+    # son paños distintos compartiendo rotulo, y eso hace que el
     # buscador encuentre uno y se pierda el otro. Se detecta y se avisa; el KMZ
     # no se corrige desde aca.
     from collections import Counter
@@ -243,15 +281,18 @@ def main():
             "cuarteles": len(features),
             "especies": len(resumen),
             "variedades": sum(len(e["variedades"]) for e in resumen),
+            "pozos": len(pozos),
         },
         "por_especie": resumen,
+        "pozos": {"type": "FeatureCollection", "features": pozos},
         "avisos": {"codigos_repetidos": repetidos},
         "cuarteles": {"type": "FeatureCollection", "features": features},
     }
 
     dest = root_dir / "geo_data.json"
     dest.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print("OK %s  cuarteles=%d" % (dest, len(features)))
+    print("OK %s  cuarteles=%d  pozos=%d (%d en uso)"
+          % (dest, len(features), len(pozos), sum(f["properties"]["en_uso"] for f in pozos)))
     if repetidos:
         print("  codigos en mas de un poligono: %s" % ", ".join(repetidos))
     for e in resumen:

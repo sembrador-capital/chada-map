@@ -171,6 +171,20 @@ a **nombre de variedad**, que es lo que permite leer el predio por variedad sin
 tener que ir al color; la variedad entra antes en zoom y con letra más grande,
 porque «Sweet Celebration» a 9 px no se lee, se adivina.
 
+Sobre los cuarteles van los **pozos**, que el KMZ trae en su propia carpeta
+`POZOS`: doce puntos, **8 en uso y 4 secos, sin uso**. Los en uso se dibujan en
+tinta con anillo blanco, y los secos en blanco con borde gris. No van en azul
+porque la uva de mesa ya es azul y el punto desaparecía encima. Desde zoom 14
+llevan rótulo («Pozo 9», «Pozo Cardonal», «Pozo seco»), y al pasar el cursor
+muestran su ficha con lo que dice el KMZ: nombre, si está en uso, el caudal
+cuando lo anota (Cardonal, 58 l/s) y la ubicación. La leyenda los cuenta abajo, en
+la caja que en las otras pestañas usa la escala. Se apagan en *Vista ▸ Capas ▸
+Pozos*, y sólo se ven en la Vista general: en las pestañas de números taparían
+justo el color que hay que leer. No son cuarteles, así que no entran en ningún
+filtro ni total. El encuadre inicial sigue siendo el de los cuarteles: Cardonal
+queda unos 700 m al noroeste del predio, y agrandar la caja para incluirlo
+achicaría todo lo demás.
+
 **Producción** — se abre por dos caras, en una subpestaña.
 
 *Proyectada (modelo)* es el rendimiento en kg/ha que el modelo asume, por
@@ -598,25 +612,43 @@ bloque y no toca la plata. El pipeline lo detecta despejando la producción desd
 los ingresos y el precio efectivo, compara contra el libro, y donde no cuadra
 usa la serie despejada. Las otras 29 variedades calzan dentro del 2%.
 
-**2. Dos variedades del modelo no tienen polígono en el KMZ:** `Red Globe`
-(2,94 ha) y `Lapins Injerto` (0,46 ha). Aparecen igual en el árbol de la leyenda,
-en cursiva y con el punto hueco, y suman en los totales: por eso el mapa
-encendido entero dice 284,02 ha y no 280,62. Lo que no pueden es pintarse, porque
-no hay polígono que pintar; al hacerles clic en la tabla el mapa lo dice en vez
-de quedarse quieto. Si aparecen en una versión futura del KMZ, se cruzan solas
-por el nombre.
+**2. Todas las variedades del modelo tienen polígono** *(resuelto con el KMZ
+actualizado de septiembre de 2026)*. Antes faltaban `Red Globe` (2,94 ha) y
+`Lapins Injerto` (0,46 ha). Red Globe estaba dibujado, pero con otro nombre: uno
+de los dos polígonos rotulados «Candy Hearts — 5137» era en realidad el
+**5166 de Red Globe**. El KMZ nuevo lo rotula bien y el plano de plantaciones
+(HCH-REG-CER-017) lo confirma: 5166, Red Globe, 2,94 ha, las mismas del modelo.
+Lapins Injerto entró con el mixto (punto 3). El mecanismo para una variedad sin
+polígono sigue en pie por si vuelve a pasar. Esa variedad aparece en el árbol de
+la leyenda en cursiva y con el punto hueco, y suma en los totales, para que el
+mapa encendido entero siga dando las 284,02 ha. El mapa lo avisa en vez de
+quedarse quieto al hacerle clic.
 
-**3. Cinco códigos de cuartel aparecen en más de un polígono.** En `8201` y
-`8209` es a propósito —vienen partidos en A y B—, pero `5127`, `5137` y `5213`
-son paños distintos con el mismo rótulo, y `5213` además cubre dos variedades
-(Cara Cara y Fukumoto). El buscador los desempata con el ID interno y el panel
-lo anota.
+**3. El cuartel mixto «ex 5226» trae ahora los injertos con su nombre.** Antes
+decía `Cheery Glow / Cheery Treat / Cheery Moon / Santina — 8203 / 8204 / 8205 /
+8206`, y «Cheery Moon» se cruzaba a mano con `Cheery Treat Injerto.` como único
+cruce aproximado del mapa. El KMZ actualizado lo reemplaza por los dos injertos
+reales: **Cheery Treat Injerto en el 8213 y Lapins Injerto en el 8214**. Es el
+mismo polígono con otro rótulo. El plano de plantaciones lo desglosa igual:
+Cheery Glow 0,41 ha (8203), Cheery Treat 1,46 (8204), Cheery Treat Injerto 2,14
+(8213), Lapins Injerto 0,46 (8214) y Santina 1,02 (8206). Ya no queda ningún
+cruce aproximado.
 
-Hay además **un cruce aproximado**: el cuartel 8205 va rotulado `Cheery Moon` en
-el KMZ y el modelo no tiene esa variedad; tiene `Cheery Treat Injerto.`, que en
-la tasación figura plantada en 2023 sobre portainjerto «Maxma 14 - Ch Moon». Se
-cruzan como el mismo bloque y el cuartel queda marcado en su ficha. Es el único
-de los 174.
+El mismo nombre trae una **errata**: el 8204 dice `Cheer Treat`. El extractor la
+corrige al leer (`ERRATAS_KMZ` en `tools/modelo_to_json.py`), la ficha muestra
+«Cheery Treat» y el panel de avisos la lista para que se arregle también en el
+KMZ. Es una tabla aparte de los alias a propósito: un alias es un segundo nombre
+para lo mismo, y una errata es un nombre mal escrito.
+
+Un detalle del plano: el rótulo del ex 5226 dice **5,24 ha**, pero sus cinco
+líneas suman 5,49. Las del modelo son las de las líneas, así que el mapa no se
+ve afectado. Queda anotado por si alguien corrige el plano.
+
+**4. Cuatro códigos de cuartel aparecen en más de un polígono.** En `8201` y
+`8209` es a propósito —vienen partidos en A y B—, pero `5127` y `5213` son paños
+distintos con el mismo rótulo, y `5213` además cubre dos variedades (Cara Cara y
+Fukumoto). El buscador los desempata con el ID interno y el panel lo anota. Eran
+cinco: `5137` dejó de repetirse cuando su segundo polígono pasó a ser el 5166.
 
 ---
 
@@ -754,9 +786,12 @@ del placemark tiene la forma `<variedades> — <cuarteles>`:
   parte del código: sale del nombre y queda en `nota`. El macrotúnel es una
   variedad aparte en el modelo —otro precio, otro CapEx—, así que esa nota es la
   que decide el cruce.
-- `Cheery Glow / Cheery Treat / Cheery Moon / Santina — 8203 / 8204 / 8205 / 8206`
-  → cuartel mixto. Las dos listas van en paralelo: la variedad *i* corresponde al
-  cuartel *i*.
+- `Cheery Glow / Cheery Treat / Cheery Treat Injerto / Lapins Injerto / Santina —
+  8203 / 8204 / 8213 / 8214 / 8206` → cuartel mixto. Las dos listas van en
+  paralelo: la variedad *i* corresponde al cuartel *i*.
+- La carpeta `POZOS` trae puntos, no polígonos. Salen aparte, en `pozos`, con lo
+  que dice el nombre: el número (`Pozo Nº9`), el caudal si lo anota (`58 lt/s`) y
+  si está seco o sin uso. Lo que el nombre no dice no se completa.
 
 ### Cómo se pinta un cuartel mixto
 
@@ -770,7 +805,10 @@ lo que significa. La ficha desglosa cada variedad por separado.
 
 El **código de cuartel** (`5218-A`, `8203`, …) para lo geográfico, y el par
 **(especie, variedad)** para lo financiero. `uid` es un correlativo del orden del
-KMZ y cambia si el KMZ se reordena: no sirve como llave entre fuentes.
+KMZ y cambia si el KMZ se reordena: no sirve como llave entre fuentes. Pasó con
+el KMZ de septiembre de 2026, cuando la carpeta de Red Globe entró detrás de
+Timpson y corrió un lugar los uid de C032 a C066. Nada se rompió, porque nada
+los guarda.
 
 ---
 

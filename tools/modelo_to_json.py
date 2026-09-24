@@ -115,13 +115,22 @@ ALIAS = {
     # CapEx). En el KMZ es Santina con el manejo anotado entre parentesis, asi
     # que la nota del cuartel decide, no el nombre.
     ("cerezos", "santina", "macrotunel"): ("Cerezas", "Santina Macro Túnel"),
-    # 8205 va rotulado "Cheery Moon" en el KMZ. El modelo no tiene esa variedad:
-    # tiene "Cheery Treat Injerto.", que en la tasacion figura plantada en 2023
-    # sobre portainjerto "Maxma 14 - Ch Moon". Se cruzan como el mismo bloque.
-    # Es el unico cruce que no es exacto y queda marcado como aproximado.
-    ("cerezos", "cheery moon", None): ("Cerezas", "Cheery Treat Injerto."),
 }
-CRUCE_APROXIMADO = {("cerezos", "cheery moon", None)}
+
+# Erratas de tipeo del KMZ. No son alias -no hay dos nombres para una misma
+# cosa, hay un nombre mal escrito-, asi que se corrigen en el cuartel antes de
+# cruzarlo, y la ficha muestra el nombre bien escrito. La correccion queda
+# registrada en los avisos para que alguien la arregle tambien en el KMZ.
+ERRATAS_KMZ = {
+    # El mixto 8203/8204/8213/8214/8206 escribe "Cheer Treat" en el 8204. El
+    # plano de plantaciones (HCH-REG-CER-017) rotula ese mismo cuartel
+    # "CHEERY TREAT 1,46 HA (8204)".
+    "cheer treat": "Cheery Treat",
+}
+# Alias que no son exactos y se marcan como aproximados en la ficha. Estuvo
+# "Cheery Moon" (el antiguo 8205), hasta que el KMZ actualizado lo reemplazo
+# por los injertos 8213 y 8214 con su nombre real. Hoy no queda ninguno.
+CRUCE_APROXIMADO = set()
 
 # El KMZ agrupa como "Disponible" lo arrancado y lo no productivo. El modelo no
 # lo incluye a proposito: es parte del puente de 311,65 ha a 284,02 ha.
@@ -1058,8 +1067,14 @@ def procesar(esc, escribir_geo):
     cuarteles_por_clave = {}
     aprox_por_clave = {}
     sin_modelo = []
+    erratas = []
     for f in geo["cuarteles"]["features"]:
         p = f["properties"]
+        corregidas = [ERRATAS_KMZ.get(norm(v), v) for v in p["variedades"]]
+        for antes, despues in zip(p["variedades"], corregidas):
+            if antes != despues:
+                erratas.append("%s: '%s' -> '%s'" % (p["cuartel"], antes, despues))
+        p["variedades"] = corregidas
         # Arrendado a terceros: fuera del analisis. No cruza con ninguna
         # variedad y su especie pasa a "Arrendado" para que en el mapa forme su
         # propia rama gris -como "Disponible"- en vez de colarse en la de la
@@ -1211,6 +1226,7 @@ def procesar(esc, escribir_geo):
             "variedades_sin_cuartel": sorted(r["variedad"] for r in variedades.values() if not r["cuarteles"]),
             "cuarteles_sin_modelo": sorted(set(sin_modelo)),
             "arrendados": ["%s (%s)" % (c, ARRENDADOS[c]["variedad"]) for c in sorted(ARRENDADOS)],
+            "erratas_kmz": sorted(set(erratas)),
             "ha_detalle_plantaciones": ha_tasacion,
             "inputs_faltantes": faltantes,
             "cosecha": avisos_cosecha,

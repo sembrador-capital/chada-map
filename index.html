@@ -96,6 +96,8 @@
        Va en gris reservado y nunca se usa como octava ranura de serie. */
     --dat-estado:  #8a8780;
     --dat-sindato: #c9c6bf;
+    --pozo-uso:    #1A2733;
+    --pozo-seco:   #6D7C86;
 
     /* MAGNITUD y POLARIDAD. Rampas de un solo tono, L monótona, paso ΔL ≥ 0,06
        y extremo claro sobre 2:1 contra el blanco: los cuatro pasan --ordinal.
@@ -373,6 +375,14 @@ body.legend-off .legend-panel { transform:translateX(-296px); opacity:0; pointer
 .escala-fila { display:flex; align-items:center; gap:6px; padding:2px 0; font-size:10px; }
 .escala-nom { flex:1; color:var(--sem-ink); line-height:1.25; }
 .escala-n { color:var(--sem-text-2); font-variant-numeric:tabular-nums; }
+/* El pozo se dibuja como un círculo: en uso, lleno en tinta con anillo blanco;
+   seco, blanco con borde gris. No va en azul: la uva de mesa ya es azul y el
+   punto desaparecía encima. Tinta con anillo blanco se lee sobre cualquier
+   color de cuartel y sobre el satelital. Es la misma forma que en el mapa,
+   para que la leyenda se lea sin traducción. */
+.pozo-dot { flex:0 0 10px; width:10px; height:10px; border-radius:50%; box-sizing:border-box; }
+.pozo-dot.en-uso { background:var(--pozo-uso); border:1.5px solid #FFFFFF; box-shadow:0 0 0 1px rgba(26,39,51,0.35); }
+.pozo-dot.sin-uso { background:#FFFFFF; border:1.5px solid var(--pozo-seco); }
 
 /* Botón «solo» de la leyenda: aparece al pasar el cursor por la fila. Visible
    siempre serían 40 botones compitiendo con los 40 nombres que hay que leer. */
@@ -700,6 +710,7 @@ body.panel-abierto .data-stamp { right:408px; }
                 <div class="fc-pop-title">Capas</div>
                 <label class="sw"><input type="checkbox" id="swRelleno" checked><span class="sw-track"></span><span>Relleno de cuarteles</span></label>
                 <label class="sw"><input type="checkbox" id="swContorno" checked><span class="sw-track"></span><span>Contorno</span></label>
+                <label class="sw" title="Se ven en la Vista general"><input type="checkbox" id="swPozos" checked><span class="sw-track"></span><span>Pozos</span></label>
                 <label class="sw"><input type="checkbox" id="swLeyenda" checked><span class="sw-track"></span><span>Panel de leyenda</span></label>
                 <label class="sw"><input type="checkbox" id="swMetricas" checked><span class="sw-track"></span><span>Barra de métricas</span></label>
             </div>
@@ -1267,11 +1278,12 @@ function prepararPaletas() {
         });
     });
 
-    // Red Globe y Lapins Injerto están en el modelo y no tienen polígono en el
-    // KMZ. Si se dejan fuera del árbol, el mapa encendido entero suma 280,62 ha
-    // y no las 284,02 del modelo, y ese descuadre no se explica en ninguna
-    // parte. Entran como rama propia, marcadas: cuentan en los totales y no
-    // pintan nada porque no hay qué pintar.
+    // Una variedad del modelo sin polígono en el KMZ -fue el caso de Red Globe
+    // y Lapins Injerto hasta que el KMZ los dibujó- no puede quedar fuera del
+    // árbol: el mapa encendido entero dejaría de sumar las 284,02 ha del modelo
+    // y ese descuadre no se explicaría en ninguna parte. Entra como rama propia,
+    // marcada: cuenta en los totales y no pinta nada porque no hay qué pintar.
+    // Hoy no queda ninguna, y el mecanismo sigue por si vuelve a pasar.
     MOD.variedades.forEach(v => {
         const clave = vkey(v.especie, v.variedad);
         if (VKEY_DE_MODELO[clave]) return;
@@ -1488,6 +1500,8 @@ function montarCapas() {
         paint: { 'text-color': '#FFFFFF', 'text-halo-color': 'rgba(26,39,51,0.85)', 'text-halo-width': 1.2 }
     });
 
+    montarPozos(cFuerte);
+
     aplicarFiltro();
     vis('cuarteles-fill',  $('swRelleno').checked);
     vis('cuarteles-line',  $('swContorno').checked);
@@ -1495,6 +1509,57 @@ function montarCapas() {
     vis('sombreado',       $('swSombreado').checked);
     aplicarRelieve($('swRelieve').checked);
     if (fijado) setEstado(fijado, 'fijo', true);
+}
+
+/* ── Pozos ──────────────────────────────────────────────────────────────
+   Vienen del KMZ, carpeta POZOS, como puntos. No son cuarteles: no tienen
+   superficie ni modelo, no entran en ningún filtro ni en ningún total, y se
+   ven sólo en la Vista general, que es donde la pregunta es «qué hay dónde».
+   En las pestañas de números taparían justo el color que hay que leer.
+
+   En uso van llenos en tinta; los secos, blancos con borde gris: el pozo sigue ahí
+   aunque no dé agua, y saber dónde está también sirve. */
+const rotuloPozo = p => p.numero != null ? 'Pozo ' + p.numero
+    : p.en_uso ? p.nombre.replace(/\s*\d+([.,]\d+)?\s*l(ts?)?\s*\/\s*s.*$/i, '')
+    : 'Pozo seco';
+
+function montarPozos(cFuerte) {
+    const pozos = GEO.pozos || { type: 'FeatureCollection', features: [] };
+    pozos.features.forEach(f => { f.properties.rotulo = rotuloPozo(f.properties); });
+    map.addSource('pozos', { type: 'geojson', data: pozos, promoteId: 'pid' });
+    map.addLayer({
+        id: 'pozos-circle', type: 'circle', source: 'pozos',
+        paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 3.5, 15, 6.5, 17, 9],
+            'circle-color': ['case', ['get', 'en_uso'], css('--pozo-uso'), '#FFFFFF'],
+            'circle-stroke-color': ['case', ['get', 'en_uso'], '#FFFFFF', css('--pozo-seco')],
+            'circle-stroke-width': ['case', ['boolean', ['feature-state', 'hover'], false], 3.2, 2]
+        }
+    });
+    map.addLayer({
+        id: 'pozos-label', type: 'symbol', source: 'pozos', minzoom: 14,
+        layout: {
+            'text-field': ['get', 'rotulo'],
+            'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 17, 12.5],
+            'text-anchor': 'top', 'text-offset': [0, 0.9],
+            'text-optional': true
+        },
+        paint: {
+            'text-color': ['case', ['get', 'en_uso'], '#FFFFFF', '#E4E1DA'],
+            'text-halo-color': 'rgba(26,39,51,0.85)', 'text-halo-width': 1.2
+        }
+    });
+    aplicarPozos();
+}
+
+const pozosVisibles = () => modo === 'general' && $('swPozos').checked && (GEO.pozos || {}).features?.length > 0;
+
+function aplicarPozos() {
+    const on = pozosVisibles();
+    vis('pozos-circle', on);
+    vis('pozos-label', on);
+    if (!on && pozoFijo) desfijar();
 }
 
 /* Qué dice la etiqueta sobre cada paño. El código del cuartel sirve de cerca,
@@ -1559,7 +1624,11 @@ function inicializar() {
     map.on('mousemove', 'cuarteles-fill', onHover);
     map.on('mouseleave', 'cuarteles-fill', onLeave);
     map.on('click', 'cuarteles-fill', onClick);
+    map.on('mousemove', 'pozos-circle', onHoverPozo);
+    map.on('mouseleave', 'pozos-circle', onLeavePozo);
+    map.on('click', 'pozos-circle', onClickPozo);
     map.on('click', e => {
+        if (sobrePozo(e.point)) return;
         if (!map.queryRenderedFeatures(e.point, { layers: ['cuarteles-fill'] }).length) desfijar();
     });
     // Mapbox emite 'mouseleave' de capa sólo si el puntero sigue sobre el
@@ -1571,8 +1640,15 @@ function inicializar() {
 /* ── Interacción ────────────────────────────────────────────────────────── */
 const setEstado = (uid, clave, valor) => { if (uid != null) map.setFeatureState({ source: 'cuarteles', id: uid }, { [clave]: valor }); };
 
+/* ¿Hay un pozo bajo el cursor? Casi todos caen dentro o al borde de un
+   cuartel, y las dos capas reciben el mismo evento: sin esta pregunta, la
+   ficha del cuartel pisaba la del pozo en cada movimiento. */
+const sobrePozo = punto => pozosVisibles() && !!map.getLayer('pozos-circle') &&
+    map.queryRenderedFeatures(punto, { layers: ['pozos-circle'] }).length > 0;
+
 function onHover(e) {
     if (!e.features.length) return;
+    if (sobrePozo(e.point)) { setEstado(hoverId, 'hover', false); hoverId = null; return; }
     const f = e.features[0];
     map.getCanvas().style.cursor = 'pointer';
     if (hoverId !== f.properties.uid) {
@@ -1580,21 +1656,77 @@ function onHover(e) {
         hoverId = f.properties.uid;
         setEstado(hoverId, 'hover', true);
     }
-    if (!fijado) mostrarFicha(f.properties, e.point);
+    if (!fijado && !pozoFijo) mostrarFicha(f.properties, e.point);
 }
 function onLeave() {
-    map.getCanvas().style.cursor = '';
+    if (!pozoHover) map.getCanvas().style.cursor = '';
     setEstado(hoverId, 'hover', false); hoverId = null;
-    if (!fijado) ocultarFicha();
+    if (!fijado && !pozoFijo && !pozoHover) ocultarFicha();
 }
 function onClick(e) {
-    if (!e.features.length) return;
+    if (!e.features.length || sobrePozo(e.point)) return;
     const p = e.features[0].properties;
+    soltarPozo();
     setEstado(fijado, 'fijo', false);
     fijado = p.uid; setEstado(fijado, 'fijo', true);
     mostrarFicha(p, e.point, true);
 }
-function desfijar() { setEstado(fijado, 'fijo', false); fijado = null; ocultarFicha(); }
+function desfijar() { setEstado(fijado, 'fijo', false); fijado = null; soltarPozo(); ocultarFicha(); }
+
+let pozoHover = null, pozoFijo = null;
+const setEstadoPozo = (pid, valor) => { if (pid != null && map.getSource('pozos')) map.setFeatureState({ source: 'pozos', id: pid }, { hover: valor }); };
+function soltarPozo() { if (pozoFijo && pozoFijo !== pozoHover) setEstadoPozo(pozoFijo, false); pozoFijo = null; }
+
+function onHoverPozo(e) {
+    if (!e.features.length) return;
+    const p = e.features[0].properties;
+    map.getCanvas().style.cursor = 'pointer';
+    if (pozoHover !== p.pid) { if (pozoHover !== pozoFijo) setEstadoPozo(pozoHover, false); pozoHover = p.pid; setEstadoPozo(pozoHover, true); }
+    if (!fijado && !pozoFijo) mostrarPozo(p, e.point);
+}
+function onLeavePozo() {
+    if (pozoHover !== pozoFijo) setEstadoPozo(pozoHover, false);
+    pozoHover = null;
+    // Si al salir del pozo el cursor quedó sobre un cuartel, su ficha ya se
+    // pintó en este mismo movimiento: no hay que esconderla.
+    if (hoverId) return;
+    map.getCanvas().style.cursor = '';
+    if (!fijado && !pozoFijo) ocultarFicha();
+}
+function onClickPozo(e) {
+    if (!e.features.length) return;
+    const p = e.features[0].properties;
+    setEstado(fijado, 'fijo', false); fijado = null;
+    soltarPozo();
+    pozoFijo = p.pid; setEstadoPozo(pozoFijo, true);
+    mostrarPozo(p, e.point, true);
+}
+
+/* La ficha del pozo usa la misma tarjeta que la del cuartel, con lo único que
+   el KMZ dice de él: el nombre, si está en uso y, cuando lo anota, el caudal.
+   Lo que no está escrito no se completa. */
+function mostrarPozo(p, punto, fija = false) {
+    const card = $('card');
+    const [lon, lat] = (GEO.pozos.features.find(f => f.properties.pid === p.pid) || { geometry: { coordinates: [] } }).geometry.coordinates;
+    const kv = (k, v) => `<div class="card-kv"><span class="card-k">${k}</span><span class="card-v">${v}</span></div>`;
+    card.innerHTML = `
+        <div class="card-head">
+            <div class="card-especie"><i class="pozo-dot ${p.en_uso ? 'en-uso' : 'sin-uso'}"></i>Pozo</div>
+            <div class="card-cuartel">${esc(rotuloPozo(p))}</div>
+            <div class="card-variedad">${p.en_uso ? 'En uso' : 'Seco, sin uso'}</div>
+            <button type="button" class="card-close" id="cardClose" aria-label="Cerrar"><svg viewBox="0 0 18 18" width="13" height="13"><use href="#ic-cerrar"/></svg></button>
+        </div>
+        <div class="card-body">
+            ${kv('Nombre en el KMZ', esc(p.nombre))}
+            ${p.caudal_ls != null ? kv('Caudal', nf(p.caudal_ls, 0) + ' l/s') : ''}
+            ${lat != null ? kv('Ubicación', nf(lat, 5) + ', ' + nf(lon, 5)) : ''}
+            <div class="card-hint">${fija ? 'Clic fuera para soltar' : 'Clic para fijar'}</div>
+        </div>`;
+    card.classList.toggle('fija', fija);
+    card.classList.add('visible');
+    if (fija) $('cardClose').onclick = desfijar;
+    posicionarFicha(punto);
+}
 
 /* Mapbox serializa los arreglos de properties a string. */
 const arr = v => { try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch (_) { return []; } };
@@ -1646,7 +1778,7 @@ function mostrarFicha(p, punto, fija = false) {
                 : '');
         if (p.arrendado) avisos.push('Cuartel <b>arrendado a terceros</b>: no entra en el análisis. El modelo dejó de contar su superficie; el KMZ lo dibuja plantado con ' + esc(p.variedad) + '.');
         else if (!regs.length) avisos.push('Sin contraparte en el modelo: el KMZ lo agrupa como <b>Disponible</b>, arrancado o no productivo.');
-        if (p.aprox) avisos.push('Cruce aproximado: el KMZ rotula <b>Cheery Moon</b> y el modelo lo lleva como <b>Cheery Treat Injerto.</b>');
+        if (p.aprox) avisos.push('Cruce aproximado: el nombre del KMZ no calza exacto con el del modelo y se cruzó por alias.');
 
         // En los demás modos el titular es otro -rendimiento, plata, suelo- y la
         // superficie no compite con él; acá sí, porque Vista general es la
@@ -1912,7 +2044,21 @@ function pintarLeyenda() {
 
 function pintarEscala() {
     const caja = $('escala');
-    if (modo === 'general') { caja.hidden = true; return; }
+    if (modo === 'general') {
+        // En la Vista general no hay escala que mostrar, y la caja queda libre
+        // para lo único que se dibuja además de los cuarteles: los pozos.
+        const pz = pozosVisibles() ? GEO.pozos.features.map(f => f.properties) : [];
+        caja.hidden = !pz.length;
+        if (!pz.length) return;
+        const enUso = pz.filter(p => p.en_uso).length;
+        caja.innerHTML = `
+            <div class="escala-tit">Pozos</div>
+            <div class="escala-lista">
+                <div class="escala-fila"><i class="pozo-dot en-uso"></i><span class="escala-nom">En uso</span><span class="escala-n">${enUso}</span></div>
+                <div class="escala-fila"><i class="pozo-dot sin-uso"></i><span class="escala-nom">Seco, sin uso</span><span class="escala-n">${pz.length - enUso}</span></div>
+            </div>`;
+        return;
+    }
 
     // El tipo de suelo no es una escala continua: es la simbología del plano,
     // categórica, y se lista con su descripción. Los colores son los del plano
@@ -2565,12 +2711,25 @@ function pintarConciliacion() {
         partes.push('<div class="mp-aviso"><b>Sin polígono en el KMZ.</b> ' + av.variedades_sin_cuartel.map(esc).join(' y ') +
             ' están en el modelo pero no tienen cuartel dibujado: suman en los totales y no se pintan.</div>');
     }
+    if (av.erratas_kmz && av.erratas_kmz.length) {
+        // Cada una viene como "cuartel: 'mal' -> 'bien'".
+        const leer = e => { const m = e.match(/^(.*): '(.*)' -> '(.*)'$/); return m ? `${esc(m[1])}: «${esc(m[2])}» por «${esc(m[3])}»` : esc(e); };
+        partes.push('<div class="mp-aviso"><b>Erratas en el KMZ.</b> Se corrigen al leerlo y la ficha muestra el nombre bien escrito, ' +
+            'pero conviene arreglarlas también en el archivo. ' + av.erratas_kmz.map(leer).join('; ') + '.</div>');
+    }
     const rep = (GEO.avisos || {}).codigos_repetidos || [];
     if (rep.length) {
+        // 8201 y 8209 vienen partidos en A y B a propósito; el resto son paños
+        // distintos con el mismo rótulo. 5213 además cubre dos variedades.
+        const partidos = rep.filter(c => ['8201', '8209'].includes(c));
+        const otros = rep.filter(c => !partidos.includes(c));
+        const lista = cs => cs.map(c => '<b>' + esc(c) + '</b>').join(cs.length > 2 ? ', ' : ' y ');
         partes.push('<div class="mp-aviso"><b>Códigos repetidos en el KMZ.</b> ' + rep.map(esc).join(', ') +
-            ' aparecen en más de un polígono. En <b>8201</b> y <b>8209</b> es a propósito —vienen partidos en A y B—, ' +
-            'pero <b>5127</b>, <b>5137</b> y <b>5213</b> son paños distintos con el mismo rótulo, y <b>5213</b> además ' +
-            'cubre dos variedades (Cara Cara y Fukumoto). El buscador los desempata con el ID interno.</div>');
+            ' aparecen en más de un polígono.' +
+            (partidos.length ? ' En ' + lista(partidos) + ' es a propósito —vienen partidos en A y B—.' : '') +
+            (otros.length ? ' ' + lista(otros) + (otros.length > 1 ? ' son paños distintos' : ' es un paño distinto') + ' con el mismo rótulo' +
+                (otros.includes('5213') ? ', y <b>5213</b> además cubre dos variedades (Cara Cara y Fukumoto)' : '') + '.' : '') +
+            ' El buscador los desempata con el ID interno.</div>');
     }
     if (GEO.suelos) {
         const g = GEO.suelos.georreferencia;
@@ -2584,8 +2743,8 @@ function pintarConciliacion() {
 function volarAVariedad(clave) {
     const feats = GEO.cuarteles.features.filter(f => (f.properties.modelo || []).includes(clave));
     if (!feats.length) {
-        // Red Globe y Lapins Injerto suman en los totales pero no tienen paño
-        // dibujado. Un clic que no hace nada se lee como que la app falló.
+        // Una variedad sin paño dibujado suma en los totales pero no hay adónde
+        // volar. Un clic que no hace nada se lee como que la app falló.
         avisar('Sin polígono en el KMZ: esta variedad suma en los totales pero no se puede mostrar en el mapa.');
         return;
     }
@@ -3056,6 +3215,7 @@ function cambiarModo(nuevo) {
     // pintaba una temporada cosechada, y los dos decían cosas distintas.
     construirSelectores();
     sincronizarControles();
+    aplicarPozos();
     repintar();
 }
 
@@ -3122,6 +3282,7 @@ const conmutar = (id, fn) => $(id).addEventListener('change', e => fn(e.target.c
 const vis = (capa, on) => { if (map.getLayer(capa)) map.setLayoutProperty(capa, 'visibility', on ? 'visible' : 'none'); };
 conmutar('swRelleno',   on => vis('cuarteles-fill', on));
 conmutar('swContorno',  on => vis('cuarteles-line', on));
+conmutar('swPozos',     () => { aplicarPozos(); pintarEscala(); });
 $('segEtiqueta').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     etiqueta = b.dataset.etq;
     $('segEtiqueta').querySelectorAll('button').forEach(x => x.classList.toggle('activo', x === b));
@@ -3186,7 +3347,7 @@ function encuadrar(animar) {
 }
 
 /* ── Búsqueda ───────────────────────────────────────────────────────────── */
-/* Cinco códigos aparecen en más de un polígono (5127, 5137, 5213, 8201, 8209).
+/* Cuatro códigos aparecen en más de un polígono (5127, 5213, 8201, 8209).
    Si la sugerencia fuera sólo «código — variedad», dos paños distintos darían la
    misma línea y el buscador se quedaría siempre con el primero. El ID interno
    desempata, y sólo aparece donde hace falta. */
